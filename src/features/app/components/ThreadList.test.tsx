@@ -166,4 +166,23 @@ describe("ThreadList", () => {
 
     expect(screen.getByText("Auto naming...")).toBeTruthy();
   });
+
+  it("marks engine badge as processing when thread is running", () => {
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        threadStatusById={{
+          "thread-1": { isProcessing: true, hasUnread: false, isReviewing: false },
+        }}
+      />,
+    );
+
+    const row = container.querySelector(".thread-row");
+    expect(row).toBeTruthy();
+    if (!row) {
+      throw new Error("Missing thread row");
+    }
+    const engineBadge = row.querySelector(".thread-engine-badge");
+    expect(engineBadge?.classList.contains("is-processing")).toBe(true);
+  });
 });

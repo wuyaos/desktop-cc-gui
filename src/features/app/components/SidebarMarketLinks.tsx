@@ -60,7 +60,7 @@ export function SidebarMarketLinks({
       <div className="sidebar-market-rail-section">
         <button
           type="button"
-          className={`sidebar-market-rail-item ${appMode === "chat" ? "is-active" : ""}`}
+          className={`sidebar-market-rail-item sidebar-market-mode-item ${appMode === "chat" ? "is-active" : ""}`}
           onClick={() => onAppModeChange("chat")}
           title={t("kanban.mode.chat")}
           aria-label={t("kanban.mode.chat")}
@@ -73,7 +73,7 @@ export function SidebarMarketLinks({
         </button>
         <button
           type="button"
-          className={`sidebar-market-rail-item ${appMode === "kanban" ? "is-active" : ""}`}
+          className={`sidebar-market-rail-item sidebar-market-mode-item ${appMode === "kanban" ? "is-active" : ""}`}
           onClick={() => onAppModeChange("kanban")}
           title={t("kanban.mode.kanban")}
           aria-label={t("kanban.mode.kanban")}

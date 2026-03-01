@@ -221,19 +221,22 @@ export function DesktopLayout({
 
   return (
     <>
-      {sidebarNode}
-      <div
-        className="sidebar-resizer"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={t("layout.resizeSidebar")}
-        onMouseDown={onSidebarResizeStart}
-      />
+      {!settingsOpen && sidebarNode}
+      {!settingsOpen && (
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("layout.resizeSidebar")}
+          onMouseDown={onSidebarResizeStart}
+        />
+      )}
 
       <section
         className={`main${settingsOpen ? " settings-open" : ""}${
           hideRightPanel ? " spec-focus" : ""
         }`}
+        style={settingsOpen ? { gridColumn: "1 / -1" } : undefined}
       >
         {errorToastsNode}
 

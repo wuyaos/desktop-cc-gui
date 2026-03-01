@@ -225,6 +225,9 @@ export const ConfigSelect = ({
         zIndex: 10001,
         minWidth: '320px',
         maxWidth: '360px',
+        maxHeight: '360px',
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
       }}
       onMouseEnter={(e) => {
         e.stopPropagation();

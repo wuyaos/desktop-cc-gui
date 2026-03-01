@@ -143,6 +143,7 @@ const CODE_MODE_FALLBACK_MARKER_REGEX = /User request\s*:\s*/i;
 const MESSAGES_PERF_DEBUG_FLAG_KEY = "mossx.debug.messages.perf";
 const MESSAGES_SLOW_RENDER_WARN_MS = 18;
 const MESSAGES_SLOW_ANCHOR_WARN_MS = 8;
+const VISIBLE_MESSAGE_WINDOW = 30;
 
 function isMessagesPerfDebugEnabled(): boolean {
   if (!import.meta.env.DEV) {
@@ -1341,10 +1342,12 @@ export const Messages = memo(function Messages({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
+  const [showAllHistoryItems, setShowAllHistoryItems] = useState(false);
   const copyTimeoutRef = useRef<number | null>(null);
   const planPanelFocusRafRef = useRef<number | null>(null);
   const planPanelFocusTimeoutRef = useRef<number | null>(null);
   const planPanelFocusNodeRef = useRef<HTMLElement | null>(null);
+  const firstItemIdRef = useRef<string | null>(items[0]?.id ?? null);
   const activeUserInputRequestId =
     threadId && userInputRequests.length
       ? (userInputRequests.find(
@@ -1402,11 +1405,11 @@ export const Messages = memo(function Messages({
       return null;
     }
     const viewportAnchorY =
-      container.getBoundingClientRect().top + Math.min(96, container.clientHeight * 0.32);
+      container.scrollTop + Math.min(96, container.clientHeight * 0.32);
     let bestId: string | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
     for (const [messageId, node] of messageNodeByIdRef.current) {
-      const distance = Math.abs(node.getBoundingClientRect().top - viewportAnchorY);
+      const distance = Math.abs(node.offsetTop - viewportAnchorY);
       if (distance < bestDistance) {
         bestDistance = distance;
         bestId = messageId;
@@ -1433,6 +1436,13 @@ export const Messages = memo(function Messages({
     autoScrollRef.current = true;
     setExpandedItems(new Set());
   }, [threadId]);
+  useEffect(() => {
+    const currentFirstId = items[0]?.id ?? null;
+    if (currentFirstId !== firstItemIdRef.current) {
+      setShowAllHistoryItems(false);
+    }
+    firstItemIdRef.current = currentFirstId;
+  }, [items]);
   const toggleExpanded = useCallback((id: string) => {
     setExpandedItems((prev) => {
       const next = new Set(prev);
@@ -1608,8 +1618,20 @@ export const Messages = memo(function Messages({
       });
     return dedupeAdjacentReasoningItems(filtered, reasoningMetaById);
   }, [activeEngine, items, latestTitleOnlyReasoningId, presentationProfile, reasoningMetaById]);
+  const shouldCollapseHistoryItems =
+    !showAllHistoryItems && visibleItems.length > VISIBLE_MESSAGE_WINDOW;
+  const collapsedHistoryItemCount = shouldCollapseHistoryItems
+    ? visibleItems.length - VISIBLE_MESSAGE_WINDOW
+    : 0;
+  const renderedItems = useMemo(
+    () =>
+      shouldCollapseHistoryItems
+        ? visibleItems.slice(collapsedHistoryItemCount)
+        : visibleItems,
+    [collapsedHistoryItemCount, shouldCollapseHistoryItems, visibleItems],
+  );
   const messageAnchors = useMemo(() => {
-    const messageItems = visibleItems.filter(
+    const messageItems = renderedItems.filter(
       (item): item is Extract<ConversationItem, { kind: "message" }> =>
         item.kind === "message" && item.role === "user",
     );
@@ -1625,7 +1647,7 @@ export const Messages = memo(function Messages({
         position,
       };
     });
-  }, [visibleItems]);
+  }, [renderedItems]);
   const hasAnchorRail = showMessageAnchors && messageAnchors.length > 1;
   const scheduleAnchorUpdate = useCallback(
     (reason: "scroll" | "sync") => {
@@ -1709,7 +1731,7 @@ export const Messages = memo(function Messages({
       logMessagesPerf("render", {
         ms: Number(renderCostMs.toFixed(2)),
         items: items.length,
-        visibleItems: visibleItems.length,
+        visibleItems: renderedItems.length,
         anchors: messageAnchors.length,
         threadId,
         changed: changedKeys,
@@ -1804,7 +1826,7 @@ export const Messages = memo(function Messages({
     };
   }, [scrollKey, isThinking, isNearBottom]);
 
-  const groupedEntries = useMemo(() => groupToolItems(visibleItems), [visibleItems]);
+  const groupedEntries = useMemo(() => groupToolItems(renderedItems), [renderedItems]);
 
   // User input requests are now rendered as a top-level modal dialog
   // (AskUserQuestionDialog mounted in App.tsx) instead of inline.
@@ -2016,6 +2038,15 @@ export const Messages = memo(function Messages({
         onScroll={updateAutoScroll}
       >
         <div className="messages-full">
+          {shouldCollapseHistoryItems && (
+            <div
+              className="messages-collapsed-indicator"
+              data-collapsed-count={collapsedHistoryItemCount}
+              onClick={() => setShowAllHistoryItems(true)}
+            >
+              {t("messages.showEarlierMessages", { count: collapsedHistoryItemCount })}
+            </div>
+          )}
           {groupedEntries.map(renderEntry)}
           {userInputNode}
           <WorkingIndicator

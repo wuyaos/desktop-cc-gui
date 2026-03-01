@@ -128,6 +128,7 @@ export type AppMode = "chat" | "kanban" | "gitHistory";
 
 
 export type ComposerEditorPreset = "default" | "helpful" | "smart";
+export type ComposerSendShortcut = "enter" | "cmdEnter";
 
 export type ComposerEditorSettings = {
   preset: ComposerEditorPreset;
@@ -199,6 +200,7 @@ export type AppSettings = {
   dictationPreferredLanguage: string | null;
   dictationHoldKey: string | null;
   composerEditorPreset: ComposerEditorPreset;
+  composerSendShortcut: ComposerSendShortcut;
   composerFenceExpandOnSpace: boolean;
   composerFenceExpandOnEnter: boolean;
   composerFenceLanguageTags: boolean;

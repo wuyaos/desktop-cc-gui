@@ -614,7 +614,7 @@ pub(crate) async fn add_workspace(
     match engine_type {
         EngineType::Claude => {
             // For Claude: No persistent session needed, just save workspace entry
-            add_workspace_for_claude(path, codex_bin, &state).await
+            add_workspace_for_cli_engine(EngineType::Claude, path, codex_bin, &state).await
         }
         EngineType::Codex => {
             // For Codex: Use existing app-server based session
@@ -633,7 +633,7 @@ pub(crate) async fn add_workspace(
         }
         EngineType::OpenCode => {
             // OpenCode follows local CLI session model (no persistent daemon session).
-            add_workspace_for_opencode(path, codex_bin, &state).await
+            add_workspace_for_cli_engine(EngineType::OpenCode, path, codex_bin, &state).await
         }
         _ => Err(format!(
             "Engine type {:?} is not yet supported. Please use Claude Code or Codex CLI.",
@@ -642,27 +642,41 @@ pub(crate) async fn add_workspace(
     }
 }
 
-/// Add workspace for Claude engine (no persistent session needed)
-async fn add_workspace_for_claude(
+/// Add workspace for a CLI-based engine (no persistent session needed).
+/// Supports Claude and OpenCode engines.
+async fn add_workspace_for_cli_engine(
+    engine_type: EngineType,
     path: String,
     codex_bin: Option<String>,
     state: &AppState,
 ) -> Result<WorkspaceInfo, String> {
-    use crate::engine::status::detect_claude_status;
+    use crate::engine::status::{detect_claude_status, detect_opencode_status};
     use std::path::PathBuf;
 
     if !PathBuf::from(&path).is_dir() {
         return Err("Workspace path must be a folder.".to_string());
     }
 
-    // Verify Claude CLI is installed
-    let claude_bin = {
-        let settings = state.app_settings.lock().await;
-        settings.claude_bin.clone()
+    let engine_name = match engine_type {
+        EngineType::Claude => "claude",
+        EngineType::OpenCode => "opencode",
+        _ => return Err(format!("Unsupported CLI engine: {:?}", engine_type)),
     };
-    let claude_status = detect_claude_status(claude_bin.as_deref()).await;
-    if !claude_status.installed {
-        return Err("CLI_NOT_FOUND:claude".to_string());
+
+    // Verify the CLI is installed
+    let cli_installed = match engine_type {
+        EngineType::Claude => {
+            let claude_bin = {
+                let settings = state.app_settings.lock().await;
+                settings.claude_bin.clone()
+            };
+            detect_claude_status(claude_bin.as_deref()).await.installed
+        }
+        EngineType::OpenCode => detect_opencode_status(None).await.installed,
+        _ => false,
+    };
+    if !cli_installed {
+        return Err(format!("CLI_NOT_FOUND:{}", engine_name));
     }
 
     let name = PathBuf::from(&path)
@@ -671,68 +685,10 @@ async fn add_workspace_for_claude(
         .unwrap_or("Workspace")
         .to_string();
 
-    // Create workspace settings with engine_type set to "claude"
-    let mut settings = WorkspaceSettings::default();
-    settings.engine_type = Some("claude".to_string());
-
-    let entry = WorkspaceEntry {
-        id: Uuid::new_v4().to_string(),
-        name: name.clone(),
-        path: path.clone(),
-        codex_bin,
-        kind: WorkspaceKind::Main,
-        parent_id: None,
-        worktree: None,
-        settings,
+    let settings = WorkspaceSettings {
+        engine_type: Some(engine_name.to_string()),
+        ..WorkspaceSettings::default()
     };
-
-    // Save workspace to storage
-    {
-        let mut workspaces = state.workspaces.lock().await;
-        workspaces.insert(entry.id.clone(), entry.clone());
-        let list: Vec<_> = workspaces.values().cloned().collect();
-        write_workspaces(&state.storage_path, &list)?;
-    }
-
-    Ok(WorkspaceInfo {
-        id: entry.id,
-        name: entry.name,
-        path: entry.path,
-        codex_bin: entry.codex_bin,
-        connected: true, // Claude is always "connected" (no persistent process needed)
-        kind: entry.kind,
-        parent_id: entry.parent_id,
-        worktree: entry.worktree,
-        settings: entry.settings,
-    })
-}
-
-/// Add workspace for OpenCode engine (no persistent session needed)
-async fn add_workspace_for_opencode(
-    path: String,
-    codex_bin: Option<String>,
-    state: &AppState,
-) -> Result<WorkspaceInfo, String> {
-    use crate::engine::status::detect_opencode_status;
-    use std::path::PathBuf;
-
-    if !PathBuf::from(&path).is_dir() {
-        return Err("Workspace path must be a folder.".to_string());
-    }
-
-    let opencode_status = detect_opencode_status(None).await;
-    if !opencode_status.installed {
-        return Err("CLI_NOT_FOUND:opencode".to_string());
-    }
-
-    let name = PathBuf::from(&path)
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Workspace")
-        .to_string();
-
-    let mut settings = WorkspaceSettings::default();
-    settings.engine_type = Some("opencode".to_string());
 
     let entry = WorkspaceEntry {
         id: Uuid::new_v4().to_string(),
@@ -1437,6 +1393,7 @@ pub(crate) async fn list_workspace_files(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<WorkspaceFilesResponse, String> {
+    const MAX_WORKSPACE_FILE_ENTRIES: usize = 20_000;
     if remote_backend::is_remote_mode(&*state).await {
         let response = remote_backend::call_remote(
             &*state,
@@ -1449,7 +1406,7 @@ pub(crate) async fn list_workspace_files(
     }
 
     workspaces_core::list_workspace_files_core(&state.workspaces, &workspace_id, |root| {
-        list_workspace_files_inner(root, usize::MAX)
+        list_workspace_files_inner(root, MAX_WORKSPACE_FILE_ENTRIES)
     })
     .await
 }

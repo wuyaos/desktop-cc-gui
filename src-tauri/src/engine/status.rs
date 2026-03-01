@@ -43,22 +43,16 @@ fn resolve_bin_path(name: &str, custom_bin: Option<&str>) -> Option<PathBuf> {
     find_cli_binary(name, None)
 }
 
-/// Detect Claude Code CLI installation status
-pub async fn detect_claude_status(custom_bin: Option<&str>) -> EngineStatus {
-    let bin_path = resolve_bin_path("claude", custom_bin);
-
-    let bin = bin_path
-        .as_ref()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| "claude".to_string());
-
-    // Build PATH env for command execution
-    let path_env = build_codex_path_env(custom_bin);
-
-    // Check version
+/// Probe a CLI binary for its version using `--version`.
+/// Returns `(installed, version, error)`.
+async fn probe_cli_version(
+    bin: &str,
+    cli_name: &str,
+    path_env: Option<&String>,
+) -> (bool, Option<String>, Option<String>) {
     let version_result = timeout(DETECTION_TIMEOUT, async {
-        let mut cmd = build_async_command(&bin);
-        if let Some(ref path) = path_env {
+        let mut cmd = build_async_command(bin);
+        if let Some(path) = path_env {
             cmd.env("PATH", path);
         }
         let output = cmd
@@ -75,41 +69,55 @@ pub async fn detect_claude_status(custom_bin: Option<&str>) -> EngineStatus {
             }
             Ok(out) => {
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                Err(format!("claude --version failed: {}", stderr.trim()))
+                Err(format!("{} --version failed: {}", cli_name, stderr.trim()))
             }
-            Err(e) => Err(format!("Failed to execute claude: {}", e)),
+            Err(e) => Err(format!("Failed to execute {}: {}", cli_name, e)),
         }
     })
     .await;
 
-    let (installed, version, error) = match version_result {
+    match version_result {
         Ok(Ok(v)) => (true, Some(v), None),
         Ok(Err(e)) => (false, None, Some(e)),
         Err(_) => (
             false,
             None,
-            Some("Timeout detecting Claude CLI".to_string()),
+            Some(format!("Timeout detecting {} CLI", cli_name)),
         ),
-    };
+    }
+}
+
+/// Build an uninstalled EngineStatus stub.
+fn not_installed_status(engine_type: EngineType, error: Option<String>) -> EngineStatus {
+    EngineStatus {
+        engine_type,
+        installed: false,
+        version: None,
+        bin_path: None,
+        home_dir: None,
+        models: Vec::new(),
+        default_model: None,
+        features: EngineFeatures::default(),
+        error,
+    }
+}
+
+/// Detect Claude Code CLI installation status
+pub async fn detect_claude_status(custom_bin: Option<&str>) -> EngineStatus {
+    let bin_path = resolve_bin_path("claude", custom_bin);
+    let bin = bin_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "claude".to_string());
+    let path_env = build_codex_path_env(custom_bin);
+
+    let (installed, version, error) = probe_cli_version(&bin, "claude", path_env.as_ref()).await;
 
     if !installed {
-        return EngineStatus {
-            engine_type: EngineType::Claude,
-            installed: false,
-            version: None,
-            bin_path: None,
-            home_dir: None,
-            models: Vec::new(),
-            default_model: None,
-            features: EngineFeatures::default(),
-            error,
-        };
+        return not_installed_status(EngineType::Claude, error);
     }
 
-    // Get home directory
     let home_dir = get_claude_home_dir();
-
-    // Get models - Claude has fixed models
     let models = get_claude_models();
     let default_model = models.iter().find(|m| m.default).map(|m| m.id.clone());
 
@@ -129,65 +137,19 @@ pub async fn detect_claude_status(custom_bin: Option<&str>) -> EngineStatus {
 /// Detect Codex CLI installation status
 pub async fn detect_codex_status(custom_bin: Option<&str>) -> EngineStatus {
     let bin_path = resolve_bin_path("codex", custom_bin);
-
     let bin = bin_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| "codex".to_string());
-
-    // Build PATH env for command execution
     let path_env = build_codex_path_env(custom_bin);
 
-    // Check version
-    let version_result = timeout(DETECTION_TIMEOUT, async {
-        let mut cmd = build_async_command(&bin);
-        if let Some(ref path) = path_env {
-            cmd.env("PATH", path);
-        }
-        let output = cmd
-            .arg("--version")
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .output()
-            .await;
-
-        match output {
-            Ok(out) if out.status.success() => {
-                let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                Ok(version)
-            }
-            Ok(out) => {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                Err(format!("codex --version failed: {}", stderr.trim()))
-            }
-            Err(e) => Err(format!("Failed to execute codex: {}", e)),
-        }
-    })
-    .await;
-
-    let (installed, version, error) = match version_result {
-        Ok(Ok(v)) => (true, Some(v), None),
-        Ok(Err(e)) => (false, None, Some(e)),
-        Err(_) => (false, None, Some("Timeout detecting Codex CLI".to_string())),
-    };
+    let (installed, version, error) = probe_cli_version(&bin, "codex", path_env.as_ref()).await;
 
     if !installed {
-        return EngineStatus {
-            engine_type: EngineType::Codex,
-            installed: false,
-            version: None,
-            bin_path: None,
-            home_dir: None,
-            models: Vec::new(),
-            default_model: None,
-            features: EngineFeatures::default(),
-            error,
-        };
+        return not_installed_status(EngineType::Codex, error);
     }
 
-    // Get home directory
     let home_dir = get_codex_home_dir();
-
     let models = get_codex_models();
     let default_model = models.iter().find(|m| m.default).map(|m| m.id.clone());
 
@@ -207,49 +169,14 @@ pub async fn detect_codex_status(custom_bin: Option<&str>) -> EngineStatus {
 /// Detect OpenCode CLI installation status
 pub async fn detect_opencode_status(custom_bin: Option<&str>) -> EngineStatus {
     let bin_path = resolve_bin_path("opencode", custom_bin);
-
     let bin = bin_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| "opencode".to_string());
-
     let path_env = build_codex_path_env(custom_bin);
 
-    let version_result = timeout(DETECTION_TIMEOUT, async {
-        let mut cmd = build_async_command(&bin);
-        if let Some(ref path) = path_env {
-            cmd.env("PATH", path);
-        }
-        let output = cmd
-            .arg("--version")
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .output()
-            .await;
-
-        match output {
-            Ok(out) if out.status.success() => {
-                let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                Ok(version)
-            }
-            Ok(out) => {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                Err(format!("opencode --version failed: {}", stderr.trim()))
-            }
-            Err(e) => Err(format!("Failed to execute opencode: {}", e)),
-        }
-    })
-    .await;
-
-    let (mut installed, mut version, mut error) = match version_result {
-        Ok(Ok(v)) => (true, Some(v), None),
-        Ok(Err(e)) => (false, None, Some(e)),
-        Err(_) => (
-            false,
-            None,
-            Some("Timeout detecting OpenCode CLI".to_string()),
-        ),
-    };
+    let (mut installed, mut version, mut error) =
+        probe_cli_version(&bin, "opencode", path_env.as_ref()).await;
 
     // OpenCode CLI in GUI-launched environments can intermittently fail `--version`
     // due to startup env quirks. Use a lightweight second probe to avoid false
@@ -257,7 +184,7 @@ pub async fn detect_opencode_status(custom_bin: Option<&str>) -> EngineStatus {
     if !installed {
         let help_probe = timeout(DETECTION_TIMEOUT, async {
             let mut cmd = build_async_command(&bin);
-            if let Some(ref path) = path_env {
+            if let Some(ref path) = &path_env {
                 cmd.env("PATH", path);
             }
             cmd.arg("--help")
@@ -280,17 +207,7 @@ pub async fn detect_opencode_status(custom_bin: Option<&str>) -> EngineStatus {
     }
 
     if !installed {
-        return EngineStatus {
-            engine_type: EngineType::OpenCode,
-            installed: false,
-            version: None,
-            bin_path: None,
-            home_dir: None,
-            models: Vec::new(),
-            default_model: None,
-            features: EngineFeatures::default(),
-            error,
-        };
+        return not_installed_status(EngineType::OpenCode, error);
     }
 
     let home_dir = get_opencode_home_dir();
@@ -353,7 +270,7 @@ fn get_claude_models() -> Vec<ModelInfo> {
             .with_alias("opus")
             .with_provider("anthropic")
             .with_description("Opus 4.6 · Latest and most capable"),
-        ModelInfo::new("claude-opus-4-6-1m", "Opus (1M context)")
+        ModelInfo::new("claude-opus-4-6[1m]", "Opus (1M context)")
             .with_provider("anthropic")
             .with_description("Opus 4.6 long-session mode"),
         ModelInfo::new("claude-opus-4-5-20251101", "Opus 4.5")
@@ -572,7 +489,7 @@ mod tests {
         assert!(!models.is_empty());
         assert!(models.iter().any(|m| m.default));
         assert!(models.iter().any(|m| m.alias == Some("sonnet".to_string())));
-        assert!(models.iter().any(|m| m.id == "claude-opus-4-6-1m"));
+        assert!(models.iter().any(|m| m.id == "claude-opus-4-6[1m]"));
         assert!(models.iter().any(|m| m.id == "claude-haiku-4-5"));
     }
 

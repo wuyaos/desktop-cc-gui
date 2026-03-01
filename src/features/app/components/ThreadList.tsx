@@ -83,6 +83,7 @@ export function ThreadList({
         : status?.hasUnread
           ? "unread"
           : "ready";
+    const isProcessing = Boolean(status?.isProcessing);
     const canPin = depth === 0;
     const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
     const isAutoNaming = isThreadAutoNaming(workspaceId, thread.id);
@@ -116,9 +117,11 @@ export function ThreadList({
           }}
         >
           <span className={`thread-status ${statusClass}`} aria-hidden />
-          {isPinned && <span className="thread-pin-icon" aria-label="Pinned">📌</span>}
+          {isPinned && <span className="thread-pin-icon" aria-label="Pinned" />}
           <span
-            className={`thread-engine-badge thread-engine-${engineSource}`}
+            className={`thread-engine-badge thread-engine-${engineSource}${
+              isProcessing ? " is-processing" : ""
+            }`}
             title={engineTitle}
           >
             <EngineIcon engine={engineSource} size={12} />
@@ -129,9 +132,6 @@ export function ThreadList({
               <span className="thread-auto-naming">{t("threads.autoNaming")}</span>
             )}
             {relativeTime && <span className="thread-time">{relativeTime}</span>}
-            <div className="thread-menu">
-              <div className="thread-menu-trigger" aria-hidden="true" />
-            </div>
           </div>
         </TooltipTrigger>
         <TooltipPopup

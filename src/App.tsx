@@ -190,13 +190,14 @@ const GitHubPanelData = lazy(() =>
   })),
 );
 
-const PANEL_LOCK_DEFAULT_PASSWORD = "123456";
+const PANEL_LOCK_INITIAL_PASSWORD = "000000";
 const LOCK_LIVE_SESSION_LIMIT = 12;
 const LOCK_LIVE_PREVIEW_MAX = 180;
 const OPENCODE_VARIANT_OPTIONS = ["minimal", "low", "medium", "high", "max"];
 const GIT_HISTORY_PANEL_MIN_HEIGHT = 260;
 const GIT_HISTORY_PANEL_MIN_TOP_CLEARANCE = 120;
 const GIT_HISTORY_PANEL_DEFAULT_RATIO = 0.5;
+const APP_JANK_DEBUG_FLAG_KEY = "mossx.debug.jank";
 
 type ThreadCompletionTracker = {
   isProcessing: boolean;
@@ -220,6 +221,13 @@ function clampGitHistoryPanelHeight(height: number, viewportHeight = getViewport
 function getDefaultGitHistoryPanelHeight(): number {
   const viewportHeight = getViewportHeight();
   return clampGitHistoryPanelHeight(viewportHeight * GIT_HISTORY_PANEL_DEFAULT_RATIO, viewportHeight);
+}
+
+function isJankDebugEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(APP_JANK_DEBUG_FLAG_KEY) === "1";
 }
 
 function normalizeLockLiveSnippet(text: string, maxLength = LOCK_LIVE_PREVIEW_MAX) {
@@ -972,9 +980,11 @@ function MainApp() {
     activeEngine,
     workspaceId: activeWorkspace?.id ?? null,
   });
+  const workspaceFilesPollingEnabled = !isCompact && !rightPanelCollapsed && filePanelMode === "files";
   const { files, directories, gitignoredFiles, isLoading: isFilesLoading, refreshFiles } = useWorkspaceFiles({
     activeWorkspace,
     onDebug: addDebugEntry,
+    pollingEnabled: workspaceFilesPollingEnabled,
   });
   const { branches, checkoutBranch, createBranch } = useGitBranches({
     activeWorkspace,
@@ -1223,6 +1233,36 @@ function MainApp() {
     resolveOpenCodeAgent: resolveOpenCodeAgentForThread,
     resolveOpenCodeVariant: resolveOpenCodeVariantForThread,
   });
+  const hydratedThreadListWorkspaceIdsRef = useRef(new Set<string>());
+  const listThreadsForWorkspaceTracked = useCallback(
+    async (
+      workspace: WorkspaceInfo,
+      options?: { preserveState?: boolean },
+    ) => {
+      await listThreadsForWorkspace(workspace, options);
+      hydratedThreadListWorkspaceIdsRef.current.add(workspace.id);
+    },
+    [listThreadsForWorkspace],
+  );
+  const ensureWorkspaceThreadListLoaded = useCallback(
+    (
+      workspaceId: string,
+      options?: { preserveState?: boolean; force?: boolean },
+    ) => {
+      const workspace = workspacesById.get(workspaceId);
+      if (!workspace) {
+        return;
+      }
+      const force = options?.force ?? false;
+      if (!force && hydratedThreadListWorkspaceIdsRef.current.has(workspaceId)) {
+        return;
+      }
+      void listThreadsForWorkspaceTracked(workspace, {
+        preserveState: options?.preserveState,
+      });
+    },
+    [listThreadsForWorkspaceTracked, workspacesById],
+  );
   const {
     activeAccount,
     accountSwitching,
@@ -1373,7 +1413,7 @@ function MainApp() {
     renameWorktreeUpstream,
     onRenameSuccess: (workspace) => {
       resetWorkspaceThreads(workspace.id);
-      void listThreadsForWorkspace(workspace);
+      void listThreadsForWorkspaceTracked(workspace);
       if (activeThreadId && activeWorkspaceId === workspace.id) {
         void refreshThread(workspace.id, activeThreadId);
       }
@@ -1535,7 +1575,7 @@ function MainApp() {
     try {
       const filePassword = await readPanelLockPasswordFile();
       if (filePassword == null) {
-        void writePanelLockPasswordFile(PANEL_LOCK_DEFAULT_PASSWORD);
+        void writePanelLockPasswordFile(PANEL_LOCK_INITIAL_PASSWORD);
         setIsPanelLocked(false);
         return true;
       }
@@ -1558,6 +1598,7 @@ function MainApp() {
       exitDiffView();
       setAppMode("chat");
       setActiveTab("codex");
+      collapseRightPanel();
       setSelectedKanbanTaskId(null);
       selectWorkspace(workspaceId);
       setActiveThreadId(threadId, workspaceId);
@@ -1569,6 +1610,7 @@ function MainApp() {
     },
     [
       exitDiffView,
+      collapseRightPanel,
       setAppMode,
       selectWorkspace,
       setActiveEngine,
@@ -1803,6 +1845,68 @@ function MainApp() {
     onDraftChange: handleDraftChange,
     textareaRef: composerInputRef,
   });
+  const perfSnapshotRef = useRef({
+    activeThreadId: null as string | null,
+    isProcessing: false,
+    activeItems: 0,
+    filesLoading: false,
+    files: 0,
+    directories: 0,
+    filePanelMode: "git" as "git" | "files" | "prompts" | "memory",
+    rightPanelCollapsed: false,
+    isCompact: false,
+    draftLength: 0,
+  });
+  useEffect(() => {
+    perfSnapshotRef.current = {
+      activeThreadId,
+      isProcessing,
+      activeItems: activeItems.length,
+      filesLoading: isFilesLoading,
+      files: files.length,
+      directories: directories.length,
+      filePanelMode,
+      rightPanelCollapsed,
+      isCompact,
+      draftLength: activeDraft.length,
+    };
+  }, [
+    activeDraft.length,
+    activeItems.length,
+    activeThreadId,
+    directories.length,
+    filePanelMode,
+    files.length,
+    isCompact,
+    isFilesLoading,
+    isProcessing,
+    rightPanelCollapsed,
+  ]);
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isJankDebugEnabled() || typeof window === "undefined") {
+      return;
+    }
+    let rafId = 0;
+    let lastFrameAt = performance.now();
+    const monitor = (timestamp: number) => {
+      const delta = timestamp - lastFrameAt;
+      if (delta >= 120) {
+        const snapshot = perfSnapshotRef.current;
+        console.warn("[perf][jank]", {
+          frameGapMs: Number(delta.toFixed(2)),
+          ...snapshot,
+        });
+      }
+      lastFrameAt = timestamp;
+      rafId = window.requestAnimationFrame(monitor);
+    };
+    rafId = window.requestAnimationFrame(monitor);
+    return () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+    };
+  }, []);
 
   const activeWorkspaceKanbanTasks = useMemo(
     () => {
@@ -2280,12 +2384,14 @@ function MainApp() {
     workspaces,
     hasLoaded,
     connectWorkspace,
-    listThreadsForWorkspace
+    activeWorkspaceId,
+    listThreadsForWorkspace: listThreadsForWorkspaceTracked,
   });
   useWorkspaceRefreshOnFocus({
     workspaces,
     refreshWorkspaces,
-    listThreadsForWorkspace
+    activeWorkspaceId,
+    listThreadsForWorkspace: listThreadsForWorkspaceTracked,
   });
 
   const {
@@ -2363,6 +2469,11 @@ function MainApp() {
     removeThread,
     t,
   ]);
+
+  const handleOpenSearchPalette = useCallback(() => {
+    setIsSearchPaletteOpen(true);
+    setSearchPaletteSelectedIndex(0);
+  }, []);
 
   useGlobalSearchShortcut({
     isEnabled: true,
@@ -2837,6 +2948,7 @@ function MainApp() {
       setWorkspaceHomeWorkspaceId(null);
       setAppMode("chat");
       setActiveTab("codex");
+      collapseRightPanel();
       selectWorkspace(workspaceId);
       setActiveThreadId(threadId, workspaceId);
       const threads = threadsByWorkspace[workspaceId] ?? [];
@@ -2847,6 +2959,7 @@ function MainApp() {
     },
     [
       exitDiffView,
+      collapseRightPanel,
       resetPullRequestSelection,
       selectWorkspace,
       setActiveEngine,
@@ -2874,6 +2987,7 @@ function MainApp() {
           return;
         }
         setActiveThreadId(threadId, activeWorkspace.id);
+        collapseRightPanel();
         if (isCompact) {
           setActiveTab("codex");
         }
@@ -2884,6 +2998,7 @@ function MainApp() {
     [
       activeWorkspace,
       alertError,
+      collapseRightPanel,
       connectWorkspace,
       isCompact,
       setActiveEngine,
@@ -2920,6 +3035,7 @@ function MainApp() {
           return;
         }
         setActiveThreadId(threadId, activeWorkspace.id);
+        collapseRightPanel();
         await sendUserMessageToThread(activeWorkspace, threadId, normalizedPrompt);
         if (isCompact) {
           setActiveTab("codex");
@@ -2931,6 +3047,7 @@ function MainApp() {
     [
       activeWorkspace,
       alertError,
+      collapseRightPanel,
       connectWorkspace,
       isCompact,
       sendUserMessageToThread,
@@ -3576,10 +3693,12 @@ function MainApp() {
       setWorkspaceHomeWorkspaceId(null);
       setCenterMode("chat");
       selectWorkspace(workspaceId);
+      ensureWorkspaceThreadListLoaded(workspaceId);
       setActiveThreadId(null, workspaceId);
     },
     onConnectWorkspace: async (workspace) => {
       await connectWorkspace(workspace);
+      ensureWorkspaceThreadListLoaded(workspace.id, { force: true });
       if (isCompact) {
         setActiveTab("codex");
       }
@@ -3594,6 +3713,10 @@ function MainApp() {
       }
       void updateWorkspaceSettings(workspaceId, {
         sidebarCollapsed: collapsed,
+      }).then(() => {
+        if (!collapsed) {
+          ensureWorkspaceThreadListLoaded(workspaceId);
+        }
       });
     },
     onSelectThread: (workspaceId, threadId) => {
@@ -3708,7 +3831,7 @@ function MainApp() {
       if (!confirmed) {
         return;
       }
-      void listThreadsForWorkspace(workspace);
+      void listThreadsForWorkspaceTracked(workspace);
     },
     updaterState,
     onUpdate: startUpdate,
@@ -3748,6 +3871,9 @@ function MainApp() {
         isCompact={isCompact}
         rightPanelCollapsed={rightPanelCollapsed}
         sidebarToggleProps={sidebarToggleProps}
+        showTerminalButton={!isCompact}
+        isTerminalOpen={terminalOpen}
+        onToggleTerminal={handleToggleTerminal}
       />
     ),
     filePanelMode,
@@ -3957,6 +4083,7 @@ function MainApp() {
     onInsertComposerText: handleInsertComposerText,
     textareaRef: composerInputRef,
     composerEditorSettings,
+    composerSendShortcut: appSettings.composerSendShortcut,
     textareaHeight,
     onTextareaHeightChange,
     dictationEnabled: appSettings.dictationEnabled && dictationReady,
@@ -4026,6 +4153,7 @@ function MainApp() {
         setActiveTab("git");
       }
     },
+    onOpenGlobalSearch: handleOpenSearchPalette,
     onOpenWorkspaceHome: handleOpenWorkspaceHome,
   });
 
@@ -4113,6 +4241,8 @@ function MainApp() {
           "--sidebar-width": `${
             isCompact
               ? sidebarWidth
+              : settingsOpen
+                ? 0
               : showGitHistory
                 ? Math.max(sidebarWidth, 360)
                 : sidebarCollapsed

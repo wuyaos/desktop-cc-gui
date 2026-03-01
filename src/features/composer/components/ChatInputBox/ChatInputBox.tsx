@@ -107,12 +107,15 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onStreamingEnabledChange,
       sendShortcut = 'enter',
       selectedAgent,
+      selectedContextChips,
+      onRemoveContextChip,
       onAgentSelect,
       onOpenAgentSettings,
       onOpenPromptSettings,
       onOpenModelSettings,
       hasMessages = false,
       onRewind,
+      showRewindEntry = true,
       statusPanelExpanded = true,
       showStatusPanelToggle = true,
       onToggleStatusPanel,
@@ -149,6 +152,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     const editableWrapperRef = useRef<HTMLDivElement>(null);
     const submittedOnEnterRef = useRef(false);
     const completionSelectedRef = useRef(false);
+    const shiftEnterRef = useRef(false);
     const [hasContent, setHasContent] = useState(false);
 
     // Flag to track if we're updating from external value
@@ -752,6 +756,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
     const {
       isResizing: isResizingInputBox,
+      isCollapsed: isInputBoxCollapsed,
       containerStyle,
       editableWrapperStyle,
       getHandleProps,
@@ -763,157 +768,187 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
     return (
       <div className="chat-input-box-wrapper">
-      <div
-        className={`chat-input-box ${isResizingInputBox ? 'is-resizing' : ''}`}
-        onClick={focusInput}
-        ref={containerRef}
-        style={containerStyle}
-      >
-        {showHeader && <ResizeHandles getHandleProps={getHandleProps} nudge={nudge} />}
-
-        {showHeader && (
-          <ChatInputBoxHeader
-            sdkStatusLoading={sdkStatusLoading}
-            sdkInstalled={sdkInstalled}
-            currentProvider={currentProvider}
-            onInstallSdk={onInstallSdk}
-            t={t}
-            attachments={attachments}
-            onRemoveAttachment={handleRemoveAttachment}
-            messageQueue={messageQueue}
-            onRemoveFromQueue={onRemoveFromQueue}
-            showOpenSourceBanner={showOpenSourceBanner}
-            onDismissOpenSourceBanner={handleDismissOpenSourceBanner}
-          />
-        )}
-
-        {/* Input area */}
         <div
-          ref={editableWrapperRef}
-          className="input-editable-wrapper"
-          onMouseOver={handleMouseOver}
-          onMouseLeave={handleMouseLeave}
-          style={editableWrapperStyle}
+          className={`chat-input-box ${isResizingInputBox ? 'is-resizing' : ''}${isInputBoxCollapsed ? ' is-collapsed' : ''}`}
+          onClick={() => {
+            if (!isInputBoxCollapsed) {
+              focusInput();
+            }
+          }}
+          ref={containerRef}
+          style={containerStyle}
         >
-          <div
-            ref={editableRef}
-            className="input-editable"
-            contentEditable={!disabled}
-            spellCheck={false}
-            data-placeholder={placeholder}
-            data-completion-suffix={inlineCompletion.suffix || ''}
-            onInput={() => {
-              // Don't pass browser's isComposing — it's unreliable in JCEF.
-              // isComposingRef (set by compositionStart/End + keyCode 229) is the
-              // sole source of truth for IME state.
-              handleInput();
-            }}
-            onKeyDown={handleKeyDown}
-            onKeyUp={handleKeyUp}
-            onBeforeInput={(e) => {
-              const inputType =
-                'inputType' in e.nativeEvent
-                  ? (e.nativeEvent as InputEvent).inputType
-                  : undefined;
-              if (inputType === 'insertParagraph') {
-                e.preventDefault();
-                // If item was just selected in completion menu with enter, don't send message
-                if (completionSelectedRef.current) {
-                  completionSelectedRef.current = false;
-                  return;
-                }
-                // Don't send message when completion menu is open
-                if (
-                  fileCompletion.isOpen ||
-                  commandCompletion.isOpen ||
-                  agentCompletion.isOpen ||
-                  promptCompletion.isOpen
-                ) {
-                  return;
-                }
-                // Only allow submit when not loading and not in IME composition
-                if (!isLoading && !isComposingRef.current) {
-                  handleSubmit();
-                }
-              }
-              // Fix: Remove delete key special handling during IME
-              // Let browser naturally handle delete operations, sync state uniformly after compositionend
-            }}
-            onCompositionStart={handleCompositionStart}
-            onCompositionEnd={handleCompositionEnd}
-            onPaste={handlePaste}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            suppressContentEditableWarning
-          />
+          {showHeader && <ResizeHandles getHandleProps={getHandleProps} nudge={nudge} />}
+
+          {!isInputBoxCollapsed && showHeader && (
+            <ChatInputBoxHeader
+              sdkStatusLoading={sdkStatusLoading}
+              sdkInstalled={sdkInstalled}
+              currentProvider={currentProvider}
+              onInstallSdk={onInstallSdk}
+              t={t}
+              attachments={attachments}
+              onRemoveAttachment={handleRemoveAttachment}
+              messageQueue={messageQueue}
+              onRemoveFromQueue={onRemoveFromQueue}
+              showOpenSourceBanner={showOpenSourceBanner}
+              onDismissOpenSourceBanner={handleDismissOpenSourceBanner}
+            />
+          )}
+
+          {/* Input area */}
+          {!isInputBoxCollapsed && (
+            <div
+              ref={editableWrapperRef}
+              className="input-editable-wrapper"
+              onMouseOver={handleMouseOver}
+              onMouseLeave={handleMouseLeave}
+              style={editableWrapperStyle}
+            >
+              <div
+                ref={editableRef}
+                className="input-editable"
+                contentEditable={!disabled}
+                spellCheck={false}
+                data-placeholder={placeholder}
+                data-completion-suffix={inlineCompletion.suffix || ''}
+                onInput={() => {
+                  // Don't pass browser's isComposing — it's unreliable in JCEF.
+                  // isComposingRef (set by compositionStart/End + keyCode 229) is the
+                  // sole source of truth for IME state.
+                  handleInput();
+                }}
+                onKeyDown={(e) => {
+                  const isEnterKey =
+                    e.key === 'Enter' || e.nativeEvent.keyCode === 13;
+                  shiftEnterRef.current = isEnterKey && e.shiftKey;
+                  handleKeyDown(e);
+                }}
+                onKeyUp={(e) => {
+                  const isEnterKey =
+                    e.key === 'Enter' || e.nativeEvent.keyCode === 13;
+                  if (isEnterKey) {
+                    shiftEnterRef.current = false;
+                  }
+                  handleKeyUp(e);
+                }}
+                onBeforeInput={(e) => {
+                  const inputType =
+                    'inputType' in e.nativeEvent
+                      ? (e.nativeEvent as InputEvent).inputType
+                      : undefined;
+                  if (inputType === 'insertParagraph') {
+                    if (shiftEnterRef.current) {
+                      return;
+                    }
+                    if (sendShortcut === 'cmdEnter') {
+                      return;
+                    }
+                    e.preventDefault();
+                    // If item was just selected in completion menu with enter, don't send message
+                    if (completionSelectedRef.current) {
+                      completionSelectedRef.current = false;
+                      return;
+                    }
+                    // Don't send message when completion menu is open
+                    if (
+                      fileCompletion.isOpen ||
+                      commandCompletion.isOpen ||
+                      agentCompletion.isOpen ||
+                      promptCompletion.isOpen
+                    ) {
+                      return;
+                    }
+                    // Only allow submit when not loading and not in IME composition
+                    if (!isLoading && !isComposingRef.current) {
+                      handleSubmit();
+                    }
+                  }
+                  // Fix: Remove delete key special handling during IME
+                  // Let browser naturally handle delete operations, sync state uniformly after compositionend
+                }}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
+                onPaste={handlePaste}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                suppressContentEditableWarning
+              />
+            </div>
+          )}
+
+          {!isInputBoxCollapsed && (
+            <ChatInputBoxFooter
+              disabled={disabled}
+              hasInputContent={hasContent || attachments.length > 0}
+              isLoading={isLoading}
+              isEnhancing={isEnhancing}
+              selectedModel={selectedModel}
+              permissionMode={permissionMode}
+              currentProvider={currentProvider}
+              providerAvailability={providerAvailability}
+              providerVersions={providerVersions}
+              reasoningEffort={reasoningEffort}
+              onSubmit={handleSubmit}
+              onStop={onStop}
+              onModeSelect={handleModeSelect}
+              onModelSelect={handleModelSelect}
+              onProviderSelect={onProviderSelect}
+              onReasoningChange={onReasoningChange}
+              onEnhancePrompt={handleEnhancePrompt}
+              alwaysThinkingEnabled={alwaysThinkingEnabled}
+              onToggleThinking={onToggleThinking}
+              streamingEnabled={streamingEnabled}
+              onStreamingEnabledChange={onStreamingEnabledChange}
+              sendShortcut={sendShortcut}
+              selectedAgent={selectedAgent}
+              onAgentSelect={(agent) => onAgentSelect?.(agent)}
+              onOpenAgentSettings={onOpenAgentSettings}
+              onAddModel={onOpenModelSettings}
+              onClearAgent={() => onAgentSelect?.(null)}
+              fileCompletion={fileCompletion}
+              commandCompletion={commandCompletion}
+              agentCompletion={agentCompletion}
+              promptCompletion={promptCompletion}
+              tooltip={tooltip}
+              promptEnhancer={{
+                isOpen: showEnhancerDialog,
+                isLoading: isEnhancing,
+                originalPrompt,
+                enhancedPrompt,
+                onUseEnhanced: handleUseEnhancedPrompt,
+                onKeepOriginal: handleKeepOriginalPrompt,
+                onClose: handleCloseEnhancerDialog,
+              }}
+              t={t}
+            />
+          )}
         </div>
 
-        <ChatInputBoxFooter
-          disabled={disabled}
-          hasInputContent={hasContent || attachments.length > 0}
-          isLoading={isLoading}
-          isEnhancing={isEnhancing}
-          selectedModel={selectedModel}
-          permissionMode={permissionMode}
-          currentProvider={currentProvider}
-          providerAvailability={providerAvailability}
-          providerVersions={providerVersions}
-          reasoningEffort={reasoningEffort}
-          onSubmit={handleSubmit}
-          onStop={onStop}
-          onModeSelect={handleModeSelect}
-          onModelSelect={handleModelSelect}
-          onProviderSelect={onProviderSelect}
-          onReasoningChange={onReasoningChange}
-          onEnhancePrompt={handleEnhancePrompt}
-          alwaysThinkingEnabled={alwaysThinkingEnabled}
-          onToggleThinking={onToggleThinking}
-          streamingEnabled={streamingEnabled}
-          onStreamingEnabledChange={onStreamingEnabledChange}
-          selectedAgent={selectedAgent}
-          onAgentSelect={(agent) => onAgentSelect?.(agent)}
-          onOpenAgentSettings={onOpenAgentSettings}
-          onAddModel={onOpenModelSettings}
-          onClearAgent={() => onAgentSelect?.(null)}
-          fileCompletion={fileCompletion}
-          commandCompletion={commandCompletion}
-          agentCompletion={agentCompletion}
-          promptCompletion={promptCompletion}
-          tooltip={tooltip}
-          promptEnhancer={{
-            isOpen: showEnhancerDialog,
-            isLoading: isEnhancing,
-            originalPrompt,
-            enhancedPrompt,
-            onUseEnhanced: handleUseEnhancedPrompt,
-            onKeepOriginal: handleKeepOriginalPrompt,
-            onClose: handleCloseEnhancerDialog,
-          }}
-          t={t}
-        />
-      </div>
-
-      {/* Context tools bar - rendered outside the input box border */}
-      {showHeader && (
-        <ContextBar
-          activeFile={activeFile}
-          selectedLines={selectedLines}
-          percentage={usagePercentage}
-          usedTokens={usageUsedTokens}
-          maxTokens={usageMaxTokens}
-          showUsage={showUsage}
-          onClearFile={onClearContext}
-          onAddAttachment={handleAddAttachment}
-          selectedAgent={selectedAgent}
-          onClearAgent={() => onAgentSelect?.(null)}
-          currentProvider={currentProvider}
-          hasMessages={hasMessages}
-          onRewind={onRewind}
-          statusPanelExpanded={statusPanelExpanded}
-          showStatusPanelToggle={showStatusPanelToggle}
-          onToggleStatusPanel={onToggleStatusPanel}
-        />
-      )}
+        {/* Context tools bar - rendered outside the input box border */}
+        {showHeader && !isInputBoxCollapsed && (
+          <ContextBar
+            activeFile={activeFile}
+            selectedLines={selectedLines}
+            percentage={usagePercentage}
+            usedTokens={usageUsedTokens}
+            maxTokens={usageMaxTokens}
+            showUsage={showUsage}
+            onClearFile={onClearContext}
+            onAddAttachment={handleAddAttachment}
+            selectedAgent={selectedAgent}
+            selectedContextChips={selectedContextChips}
+            onRemoveContextChip={onRemoveContextChip}
+            onClearAgent={() => onAgentSelect?.(null)}
+            currentProvider={currentProvider}
+            hasMessages={hasMessages}
+            onRewind={onRewind}
+            showRewindEntry={showRewindEntry}
+            statusPanelExpanded={statusPanelExpanded}
+            showStatusPanelToggle={showStatusPanelToggle}
+            onToggleStatusPanel={onToggleStatusPanel}
+          />
+        )}
       </div>
     );
   }

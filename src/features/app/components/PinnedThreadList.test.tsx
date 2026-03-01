@@ -113,6 +113,9 @@ describe("PinnedThreadList", () => {
       "thread-2",
       true,
     );
+
+    const engineBadge = secondRow.querySelector(".thread-engine-badge");
+    expect(engineBadge?.classList.contains("is-processing")).toBe(true);
   });
 
   it("shows auto naming loading badge for pinned thread", () => {

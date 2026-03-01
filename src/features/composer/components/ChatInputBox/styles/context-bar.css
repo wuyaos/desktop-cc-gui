@@ -23,13 +23,16 @@
 .context-tools {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 1px;
 }
 
 .context-token-indicator {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-left: 0;
+  margin-right: 8px;
+  flex-shrink: 0;
 }
 
 .context-tool-btn {
@@ -78,7 +81,7 @@
   width: 1px;
   height: 16px;
   background: var(--input-border);
-  margin: 0 4px;
+  margin: 0 1px;
 }
 
 /* Right side tools container */

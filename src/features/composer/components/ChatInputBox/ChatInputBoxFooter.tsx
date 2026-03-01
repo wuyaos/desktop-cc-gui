@@ -38,6 +38,7 @@ export function ChatInputBoxFooter({
   onToggleThinking,
   streamingEnabled,
   onStreamingEnabledChange,
+  sendShortcut,
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
@@ -72,6 +73,7 @@ export function ChatInputBoxFooter({
   onToggleThinking?: (enabled: boolean) => void;
   streamingEnabled?: boolean;
   onStreamingEnabledChange?: (enabled: boolean) => void;
+  sendShortcut: 'enter' | 'cmdEnter';
   selectedAgent?: SelectedAgent | null;
   onAgentSelect?: (agent: SelectedAgent) => void;
   onOpenAgentSettings?: () => void;
@@ -118,6 +120,7 @@ export function ChatInputBoxFooter({
         onToggleThinking={onToggleThinking}
         streamingEnabled={streamingEnabled}
         onStreamingEnabledChange={onStreamingEnabledChange}
+        sendShortcut={sendShortcut}
         selectedAgent={selectedAgent}
         onAgentSelect={(agent) => onAgentSelect?.(agent)}
         onOpenAgentSettings={onOpenAgentSettings}

@@ -42,6 +42,8 @@ export function useNativeEventCapture({
   handleSubmit,
   handleEnhancePrompt,
 }: UseNativeEventCaptureOptions): void {
+  const sawShiftEnterRef = useRef(false);
+
   // Keep latest values without re-subscribing native listeners on every render.
   const latestRef = useRef<UseNativeEventCaptureOptions>({
     editableRef,
@@ -87,6 +89,8 @@ export function useNativeEventCapture({
       // stuck, blocking handleInput and causing cursor jumping on space key.
 
       const isEnterKey = ev.key === 'Enter' || ev.keyCode === 13;
+      const shift = (ev as KeyboardEvent).shiftKey === true;
+      sawShiftEnterRef.current = isEnterKey && shift;
 
       if (ev.key === '/' && ev.metaKey && !ev.shiftKey && !ev.altKey) {
         ev.preventDefault();
@@ -115,7 +119,6 @@ export function useNativeEventCapture({
       }
 
       const isRecentlyComposing = Date.now() - latest.lastCompositionEndTimeRef.current < 100;
-      const shift = (ev as KeyboardEvent).shiftKey === true;
       const metaOrCtrl = ev.metaKey || ev.ctrlKey;
       const isSendKey =
         latest.sendShortcut === 'cmdEnter'
@@ -135,6 +138,9 @@ export function useNativeEventCapture({
     const nativeKeyUp = (ev: KeyboardEvent) => {
       const latest = latestRef.current;
       const isEnterKey = ev.key === 'Enter' || ev.keyCode === 13;
+      if (isEnterKey) {
+        sawShiftEnterRef.current = false;
+      }
       const shift = (ev as KeyboardEvent).shiftKey === true;
       const metaOrCtrl = ev.metaKey || ev.ctrlKey;
 
@@ -156,6 +162,11 @@ export function useNativeEventCapture({
       const latest = latestRef.current;
       const type = (ev as InputEvent).inputType;
       if (type !== 'insertParagraph') return;
+
+      if (sawShiftEnterRef.current) {
+        sawShiftEnterRef.current = false;
+        return;
+      }
 
       if (latest.sendShortcut === 'cmdEnter') return;
 

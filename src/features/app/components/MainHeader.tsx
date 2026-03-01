@@ -86,8 +86,8 @@ export function MainHeader({
   branches,
   onCheckoutBranch,
   onCreateBranch,
-  canCopyThread = false,
-  onCopyThread,
+  canCopyThread: _canCopyThread = false,
+  onCopyThread: _onCopyThread,
   onLockPanel,
   extraActionsNode,
   launchScript = null,
@@ -111,10 +111,8 @@ export function MainHeader({
   const [infoOpen, setInfoOpen] = useState(false);
   const [branchQuery, setBranchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [copyFeedback, setCopyFeedback] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
-  const copyTimeoutRef = useRef<number | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const infoRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
@@ -251,32 +249,6 @@ export function MainHeader({
       renameOnCancel();
     }
   }, [infoOpen, renameOnCancel]);
-
-  useEffect(() => {
-    return () => {
-      if (copyTimeoutRef.current) {
-        window.clearTimeout(copyTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleCopyClick = async () => {
-    if (!onCopyThread) {
-      return;
-    }
-    try {
-      await onCopyThread();
-      setCopyFeedback(true);
-      if (copyTimeoutRef.current) {
-        window.clearTimeout(copyTimeoutRef.current);
-      }
-      copyTimeoutRef.current = window.setTimeout(() => {
-        setCopyFeedback(false);
-      }, 1200);
-    } catch {
-      // Errors are handled upstream in the copy handler.
-    }
-  };
 
   return (
     <header className="main-header" data-tauri-drag-region>
@@ -720,20 +692,6 @@ export function MainHeader({
         >
           <span className="main-header-icon" aria-hidden>
             <Lock size={16} />
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`ghost main-header-action${copyFeedback ? " is-copied" : ""}`}
-          onClick={handleCopyClick}
-          disabled={!canCopyThread || !onCopyThread}
-          data-tauri-drag-region="false"
-          aria-label={t("threads.copyThread")}
-          title={t("threads.copyThread")}
-        >
-          <span className="main-header-icon" aria-hidden>
-            <Copy className="main-header-icon-copy" size={14} />
-            <Check className="main-header-icon-check" size={14} />
           </span>
         </button>
         {extraActionsNode}

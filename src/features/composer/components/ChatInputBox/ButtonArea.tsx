@@ -90,6 +90,7 @@ export const ButtonArea = ({
   onToggleThinking,
   streamingEnabled = true,
   onStreamingEnabledChange,
+  sendShortcut = 'enter',
   selectedAgent,
   onAgentSelect,
   onOpenAgentSettings,
@@ -269,7 +270,11 @@ export const ButtonArea = ({
             className="submit-button"
             onClick={handleSubmitClick}
             disabled={disabled || !hasInputContent}
-            title={t('chat.sendMessageEnter')}
+            title={
+              sendShortcut === 'cmdEnter'
+                ? t('chat.sendMessageCmdEnter')
+                : t('chat.sendMessageEnter')
+            }
           >
             <span className="codicon codicon-send" />
           </button>

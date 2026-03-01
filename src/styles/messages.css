@@ -27,6 +27,22 @@
   min-height: 100%;
 }
 
+.messages-collapsed-indicator {
+  padding: 8px 20px;
+  text-align: center;
+  color: var(--text-faint, #888);
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+  user-select: none;
+}
+
+.messages-collapsed-indicator:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 .main .messages {
   margin-top: calc(-1 * var(--main-topbar-height));
 }
@@ -248,6 +264,14 @@
 .message {
   display: flex;
   margin-bottom: 12px;
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 120px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message {
+    content-visibility: visible;
+  }
 }
 
 .message.user {

@@ -698,6 +698,63 @@ function sliceByCompactStreamingLength(value: string, compactLength: number) {
   return "";
 }
 
+function takeByCompactStreamingLength(value: string, compactLength: number) {
+  if (compactLength <= 0) {
+    return "";
+  }
+  let count = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (!/\s/.test(value[index])) {
+      count += 1;
+    }
+    if (count >= compactLength) {
+      let end = index + 1;
+      while (end < value.length && /\s/.test(value[end])) {
+        end += 1;
+      }
+      return value.slice(0, end);
+    }
+  }
+  return value;
+}
+
+function mergeShiftedSnapshot(existing: string, delta: string) {
+  const comparableExisting = compactComparableStreamingText(existing);
+  const comparableDelta = compactComparableStreamingText(delta);
+  if (comparableExisting.length < 24 || comparableDelta.length < 24) {
+    return null;
+  }
+  if (comparableDelta.length < Math.floor(comparableExisting.length * 0.45)) {
+    return null;
+  }
+  const anchorLength = Math.min(
+    28,
+    Math.max(10, Math.floor(comparableDelta.length * 0.2)),
+  );
+  const deltaAnchor = comparableDelta.slice(0, anchorLength);
+  if (!deltaAnchor) {
+    return null;
+  }
+  const shiftIndex = comparableExisting.indexOf(deltaAnchor);
+  if (shiftIndex <= 0) {
+    return null;
+  }
+  const existingTail = comparableExisting.slice(shiftIndex);
+  const comparableOverlap = sharedPrefixLength(existingTail, comparableDelta);
+  const minComparableLength = Math.min(existingTail.length, comparableDelta.length);
+  if (
+    minComparableLength < 16 ||
+    comparableOverlap < Math.floor(minComparableLength * 0.72)
+  ) {
+    return null;
+  }
+  const existingPrefix = takeByCompactStreamingLength(existing, shiftIndex);
+  if (!existingPrefix.trim()) {
+    return null;
+  }
+  return `${existingPrefix}${delta}`;
+}
+
 function scoreParagraphFragmentation(value: string) {
   const segments = value
     .split(PARAGRAPH_BREAK_SPLIT_REGEX)
@@ -836,6 +893,10 @@ function mergeAgentMessageText(existing: string, delta: string) {
       ) {
         return chooseReadableText(existing, normalizedDelta);
       }
+    }
+    const shiftedSnapshot = mergeShiftedSnapshot(existing, normalizedDelta);
+    if (shiftedSnapshot) {
+      return chooseReadableText(existing, shiftedSnapshot);
     }
   }
   return mergeStreamingText(existing, normalizedDelta);

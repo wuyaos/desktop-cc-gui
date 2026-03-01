@@ -8,6 +8,12 @@
   background: var(--surface-card-strong, var(--background));
 }
 
+.main.settings-open > .settings-embedded {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  align-self: stretch;
+}
+
 .settings-header {
   display: flex;
   align-items: center;
@@ -83,42 +89,79 @@
 .settings-body {
   flex: 1;
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
 
 .settings-sidebar {
-  padding: 16px;
+  padding: 12px 10px;
   border-right: 1px solid var(--border-muted);
-  background: var(--surface-sidebar);
+  background: var(--desktop-sidebar-background, var(--surface-sidebar));
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
 .settings-nav {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 36px;
   gap: 10px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
+  line-height: 1.15;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .settings-nav svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.9;
+  flex-shrink: 0;
+}
+
+.settings-nav .codicon {
+  width: 18px;
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.settings-nav-return {
+  margin-top: 20px;
+  margin-bottom: 6px;
+  margin-left: -4px;
+  border-radius: 10px;
+  color: color-mix(in srgb, var(--text-muted) 92%, var(--text-strong) 8%);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.settings-nav-return svg {
+  width: 13px;
+  height: 13px;
 }
 
 .settings-nav.active {
-  background: var(--surface-card);
-  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--surface-card) 64%, transparent);
   color: var(--text-strong);
+  font-weight: 700;
+}
+
+.settings-nav:hover {
+  background: color-mix(in srgb, var(--surface-card) 40%, transparent);
+}
+
+.settings-nav-return:hover {
+  background: transparent;
 }
 
 .settings-content {
@@ -995,6 +1038,73 @@
 
 .settings-toggle-row + .settings-field {
   margin-top: 12px;
+}
+
+.settings-send-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.settings-send-shortcut-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-muted);
+  background: var(--surface-card);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-send-shortcut-option:hover {
+  border-color: var(--border-strong);
+}
+
+.settings-send-shortcut-option:focus-visible {
+  outline: none;
+  border-color: var(--border-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--border-accent) 35%, transparent);
+}
+
+.settings-send-shortcut-option.is-active {
+  border-color: color-mix(in srgb, #2088ff 65%, var(--border-muted));
+  box-shadow: 0 0 0 1px color-mix(in srgb, #2088ff 30%, transparent);
+}
+
+.settings-send-shortcut-option-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-send-shortcut-option-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.settings-send-shortcut-option-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #2088ff 88%, transparent);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.settings-send-shortcut-option-desc {
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.5;
 }
 
 .settings-sound-actions {

@@ -19,6 +19,7 @@ import { ChatInputBox } from './ChatInputBox';
 import type {
   ChatInputBoxHandle,
   Attachment,
+  ContextSelectionChip,
   PermissionMode,
   ReasoningEffort,
   SelectedAgent,
@@ -132,14 +133,18 @@ export interface ChatInputBoxAdapterProps {
 
   // Header/context bar
   placeholder?: string;
+  sendShortcut?: 'enter' | 'cmdEnter';
   activeFile?: string;
   selectedLines?: string;
   onClearContext?: () => void;
   selectedAgent?: SelectedAgent | null;
+  selectedContextChips?: ContextSelectionChip[];
+  onRemoveContextChip?: (chip: ContextSelectionChip) => void;
   onAgentSelect?: (agent: SelectedAgent | null) => void;
   onOpenAgentSettings?: () => void;
   hasMessages?: boolean;
   onRewind?: () => void;
+  showRewindEntry?: boolean;
   statusPanelExpanded?: boolean;
   showStatusPanelToggle?: boolean;
   onToggleStatusPanel?: () => void;
@@ -273,14 +278,18 @@ export const ChatInputBoxAdapter = forwardRef<ChatInputBoxHandle, ChatInputBoxAd
       directories,
       commands,
       placeholder,
+      sendShortcut = 'enter',
       activeFile,
       selectedLines,
       onClearContext,
       selectedAgent,
+      selectedContextChips,
+      onRemoveContextChip,
       onAgentSelect,
       onOpenAgentSettings,
       hasMessages,
       onRewind,
+      showRewindEntry,
       statusPanelExpanded,
       showStatusPanelToggle,
       onToggleStatusPanel,
@@ -449,52 +458,85 @@ export const ChatInputBoxAdapter = forwardRef<ChatInputBoxHandle, ChatInputBoxAd
       }));
     }, [queuedMessages]);
 
-    const completionFiles = useMemo<FileItem[]>(() => {
-      const directoryItems: FileItem[] = (directories ?? []).map((path) => {
-        const normalizedPath = `${normalizePath(path)}/`;
-        const name = fileNameFromPath(path);
-        return {
-          name,
-          path: normalizedPath,
-          absolutePath: normalizedPath,
-          type: 'directory',
-          extension: '',
-        };
-      });
-
-      const fileItems: FileItem[] = (files ?? []).map((path) => {
-        const normalizedPath = normalizePath(path);
-        const name = fileNameFromPath(path);
-        return {
-          name,
-          path: normalizedPath,
-          absolutePath: normalizedPath,
-          type: 'file',
-          extension: extensionFromFileName(name),
-        };
-      });
-
-      return [...directoryItems, ...fileItems];
-    }, [directories, files]);
-
     const fileCompletionProvider = useCallback(
       async (query: string, signal: AbortSignal): Promise<FileItem[]> => {
         if (signal.aborted) {
           throw new DOMException('Aborted', 'AbortError');
         }
+        const sourceDirectories = directories ?? [];
+        const sourceFiles = files ?? [];
         const normalizedQuery = query.trim().toLowerCase();
+        const maxSuggestions = 500;
+        const results: FileItem[] = [];
+
+        const pushDirectory = (path: string) => {
+          const normalizedPath = `${normalizePath(path)}/`;
+          const name = fileNameFromPath(path);
+          results.push({
+            name,
+            path: normalizedPath,
+            absolutePath: normalizedPath,
+            type: 'directory',
+            extension: '',
+          });
+        };
+        const pushFile = (path: string) => {
+          const normalizedPath = normalizePath(path);
+          const name = fileNameFromPath(path);
+          results.push({
+            name,
+            path: normalizedPath,
+            absolutePath: normalizedPath,
+            type: 'file',
+            extension: extensionFromFileName(name),
+          });
+        };
+
         if (!normalizedQuery) {
-          return completionFiles.slice(0, 500);
+          for (const path of sourceDirectories) {
+            pushDirectory(path);
+            if (results.length >= maxSuggestions) {
+              return results;
+            }
+          }
+          for (const path of sourceFiles) {
+            pushFile(path);
+            if (results.length >= maxSuggestions) {
+              return results;
+            }
+          }
+          return results;
         }
-        return completionFiles
-          .filter((item) => {
-            const name = item.name.toLowerCase();
-            const path = item.path.toLowerCase();
-            return name.includes(normalizedQuery) || path.includes(normalizedQuery);
-          })
-          .slice(0, 500);
+
+        for (const path of sourceDirectories) {
+          const normalizedPath = normalizePath(path);
+          const name = fileNameFromPath(path);
+          if (
+            name.toLowerCase().includes(normalizedQuery) ||
+            normalizedPath.toLowerCase().includes(normalizedQuery)
+          ) {
+            pushDirectory(path);
+            if (results.length >= maxSuggestions) {
+              return results;
+            }
+          }
+        }
+        for (const path of sourceFiles) {
+          const normalizedPath = normalizePath(path);
+          const name = fileNameFromPath(path);
+          if (
+            name.toLowerCase().includes(normalizedQuery) ||
+            normalizedPath.toLowerCase().includes(normalizedQuery)
+          ) {
+            pushFile(path);
+            if (results.length >= maxSuggestions) {
+              return results;
+            }
+          }
+        }
+        return results;
       },
-      [completionFiles],
+      [directories, files],
     );
 
     const builtinSlashCommands = useMemo<CommandItem[]>(() => [
@@ -618,6 +660,7 @@ export const ChatInputBoxAdapter = forwardRef<ChatInputBoxHandle, ChatInputBoxAd
         disabled={disabled}
         value={text}
         placeholder={placeholder ?? t('chat.inputPlaceholder')}
+        sendShortcut={sendShortcut}
         selectedModel={selectedModelId ?? 'claude-sonnet-4-6'}
         permissionMode={permissionMode}
         currentProvider={engineToProvider(selectedEngine)}
@@ -651,11 +694,14 @@ export const ChatInputBoxAdapter = forwardRef<ChatInputBoxHandle, ChatInputBoxAd
         }
         onStreamingEnabledChange={handleStreamingToggle}
         selectedAgent={selectedAgent}
+        selectedContextChips={selectedContextChips}
+        onRemoveContextChip={onRemoveContextChip}
         onAgentSelect={onAgentSelect}
         onClearAgent={onAgentSelect ? () => onAgentSelect?.(null) : undefined}
         onOpenAgentSettings={onOpenAgentSettings}
         hasMessages={hasMessages}
         onRewind={onRewind}
+        showRewindEntry={showRewindEntry}
         statusPanelExpanded={statusPanelExpanded}
         showStatusPanelToggle={showStatusPanelToggle}
         onToggleStatusPanel={onToggleStatusPanel}

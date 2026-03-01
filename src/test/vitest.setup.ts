@@ -39,6 +39,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.addWorkspaceToStart": "Add a workspace to start.",
         "sidebar.quickNewThread": "New Thread",
         "sidebar.quickAutomation": "Automation",
+        "sidebar.quickSearch": "Search",
         "sidebar.quickSkills": "Skills",
         "sidebar.threadsSection": "Threads",
         "sidebar.dropProjectHere": "Drop Project Here",
@@ -100,6 +101,7 @@ vi.mock("react-i18next", () => ({
         // Common actions
         "settings.close": "Close",
         "settings.closeSettings": "Close settings",
+        "settings.backToApp": "Back to app",
         "settings.save": "Save",
         "settings.saving": "Saving...",
         "settings.reset": "Reset",
@@ -166,6 +168,12 @@ vi.mock("react-i18next", () => ({
         // Composer section
         "settings.composerTitle": "Composer",
         "settings.composerDescription": "Control helpers and formatting behavior inside the message editor.",
+        "settings.sendShortcutSubtitle": "Send shortcut",
+        "settings.sendShortcutSubDescription": "Choose how to send messages and insert new lines in the composer.",
+        "settings.sendShortcutEnterTitle": "Enter sends",
+        "settings.sendShortcutEnterDesc": "Press Enter to send, Shift+Enter for a new line.",
+        "settings.sendShortcutCmdEnterTitle": "⌘/Ctrl+Enter sends",
+        "settings.sendShortcutCmdEnterDesc": "Press ⌘/Ctrl+Enter to send, Enter for a new line.",
         "settings.presetsSubtitle": "Presets",
         "settings.presetsSubDescription": "Choose a starting point and fine-tune the toggles below.",
         "settings.preset": "Preset",

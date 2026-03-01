@@ -61,6 +61,7 @@ export function PinnedThreadList({
             : status?.hasUnread
               ? "unread"
               : "ready";
+        const isProcessing = Boolean(status?.isProcessing);
         const canPin = depth === 0;
         const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
         const isAutoNaming = isThreadAutoNaming(workspaceId, thread.id);
@@ -102,7 +103,9 @@ export function PinnedThreadList({
               </span>
             )}
             <span
-              className={`thread-engine-badge thread-engine-${engineSource}`}
+              className={`thread-engine-badge thread-engine-${engineSource}${
+                isProcessing ? " is-processing" : ""
+              }`}
               title={engineTitle}
             >
               <EngineIcon engine={engineSource} size={12} />
@@ -113,9 +116,6 @@ export function PinnedThreadList({
                 <span className="thread-auto-naming">{t("threads.autoNaming")}</span>
               )}
               {relativeTime && <span className="thread-time">{relativeTime}</span>}
-              <div className="thread-menu">
-                <div className="thread-menu-trigger" aria-hidden="true" />
-              </div>
             </div>
           </div>
         );

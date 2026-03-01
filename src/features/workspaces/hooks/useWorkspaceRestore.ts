@@ -4,6 +4,7 @@ import type { WorkspaceInfo } from "../../../types";
 type WorkspaceRestoreOptions = {
   workspaces: WorkspaceInfo[];
   hasLoaded: boolean;
+  activeWorkspaceId: string | null;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   listThreadsForWorkspace: (
     workspace: WorkspaceInfo,
@@ -14,6 +15,7 @@ type WorkspaceRestoreOptions = {
 export function useWorkspaceRestore({
   workspaces,
   hasLoaded,
+  activeWorkspaceId,
   connectWorkspace,
   listThreadsForWorkspace,
 }: WorkspaceRestoreOptions) {
@@ -23,21 +25,51 @@ export function useWorkspaceRestore({
     if (!hasLoaded) {
       return;
     }
-    workspaces.forEach((workspace) => {
+    const pending = workspaces.filter((workspace) => {
       if (restoredWorkspaces.current.has(workspace.id)) {
+        return false;
+      }
+      if (workspace.id === activeWorkspaceId) {
+        return true;
+      }
+      return !workspace.settings.sidebarCollapsed;
+    });
+    if (pending.length === 0) {
+      return;
+    }
+    pending.forEach((workspace) => {
+      restoredWorkspaces.current.add(workspace.id);
+    });
+    const active = pending.find((w) => w.id === activeWorkspaceId);
+    const rest = pending.filter((w) => w.id !== activeWorkspaceId);
+    let cancelled = false;
+    const restoreOne = async (workspace: WorkspaceInfo) => {
+      if (cancelled) {
         return;
       }
-      restoredWorkspaces.current.add(workspace.id);
-      void (async () => {
-        try {
-          if (!workspace.connected) {
-            await connectWorkspace(workspace);
-          }
-          await listThreadsForWorkspace(workspace);
-        } catch {
-          // Silent: connection errors show in debug panel.
+      if (!workspace.connected) {
+        await connectWorkspace(workspace);
+      }
+      await listThreadsForWorkspace(workspace);
+    };
+    void (async () => {
+      try {
+        if (active) {
+          await restoreOne(active);
         }
-      })();
-    });
-  }, [connectWorkspace, hasLoaded, listThreadsForWorkspace, workspaces]);
+        await Promise.allSettled(rest.map((w) => restoreOne(w).catch(() => {})));
+      } catch {
+        // Silent: connection errors show in debug panel.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeWorkspaceId,
+    connectWorkspace,
+    hasLoaded,
+    listThreadsForWorkspace,
+    workspaces,
+  ]);
 }

@@ -261,14 +261,14 @@
 
 .token-indicator-bg {
   fill: none;
-  stroke: var(--progress-bg);
-  stroke-width: 1.5;
+  stroke: var(--token-ring-track, rgba(120, 120, 128, 0.35));
+  stroke-width: 1.8;
 }
 
 .token-indicator-fill {
   fill: none;
-  stroke: var(--progress-fill);
-  stroke-width: 1.5;
+  stroke: var(--token-ring-fill, #4d8ff0);
+  stroke-width: 1.8;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.3s;
 }

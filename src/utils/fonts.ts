@@ -1,8 +1,8 @@
 export const DEFAULT_UI_FONT_FAMILY =
-  "\"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif";
+  "Monaco, \"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif";
 
 export const DEFAULT_CODE_FONT_FAMILY =
-  "\"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace";
+  "Monaco, \"SF Mono\", \"SFMono-Regular\", Menlo, monospace";
 
 export const CODE_FONT_SIZE_DEFAULT = 11;
 export const CODE_FONT_SIZE_MIN = 9;

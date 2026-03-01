@@ -737,7 +737,7 @@ export function useThreadActions({
         const mergedById = new Map<string, ThreadSummary>();
         summaries.forEach((entry) => mergedById.set(entry.id, entry));
         const [claudeResult, opencodeResult] = await Promise.allSettled([
-          listClaudeSessionsService(workspace.path, 200),
+          listClaudeSessionsService(workspace.path, 50),
           getOpenCodeSessionListService(workspace.id),
         ]);
         if (claudeResult.status === "fulfilled") {

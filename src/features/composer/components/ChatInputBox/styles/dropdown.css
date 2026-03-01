@@ -24,13 +24,26 @@
   transition: background 0.1s;
 }
 
-.dropdown-item:hover,
-.dropdown-item.active {
+.dropdown-item:hover {
   background: var(--dropdown-hover);
 }
 
+.dropdown-item.active,
 .dropdown-item.selected {
   background: var(--dropdown-selected);
+  color: var(--dropdown-selected-text, var(--text-primary));
+}
+
+.dropdown-item.active .dropdown-item-icon,
+.dropdown-item.active .dropdown-item-label,
+.dropdown-item.selected .dropdown-item-icon,
+.dropdown-item.selected .dropdown-item-label {
+  color: inherit;
+}
+
+.dropdown-item.active .dropdown-item-description,
+.dropdown-item.selected .dropdown-item-description {
+  color: color-mix(in srgb, currentColor 78%, transparent);
 }
 
 /* Disabled state (directory) */
@@ -115,4 +128,3 @@
   color: var(--text-secondary);
   font-size: 12px;
 }
-

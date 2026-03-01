@@ -12,13 +12,13 @@ import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal";
 import Mic from "lucide-react/dist/esm/icons/mic";
 import Keyboard from "lucide-react/dist/esm/icons/keyboard";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import Stethoscope from "lucide-react/dist/esm/icons/stethoscope";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 
-import X from "lucide-react/dist/esm/icons/x";
 import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import Store from "lucide-react/dist/esm/icons/store";
@@ -87,9 +87,10 @@ import {
   setHistoryCompletionEnabled,
 } from "../../composer/hooks/useInputHistoryStore";
 
-// Feature flag to show/hide Codex and Experimental sections
-// Set to true to show these menu items
-const SHOW_CODEX_AND_EXPERIMENTAL = true;
+// Feature flags to show/hide settings sidebar entries
+const SHOW_DICTATION_ENTRY = false;
+const SHOW_GIT_ENTRY = false;
+const SHOW_CODEX_AND_EXPERIMENTAL = false;
 
 const DICTATION_MODELS = (t: (key: string) => string) => [
   { id: "tiny", label: t("settings.dictationModelTiny"), size: "75 MB", note: t("settings.dictationModelFastest") },
@@ -900,6 +901,18 @@ export function SettingsView({
     });
   };
 
+  const handleComposerSendShortcutChange = (
+    shortcut: AppSettings["composerSendShortcut"],
+  ) => {
+    if (appSettings.composerSendShortcut === shortcut) {
+      return;
+    }
+    void onUpdateAppSettings({
+      ...appSettings,
+      composerSendShortcut: shortcut,
+    });
+  };
+
   const handleBrowseCodex = async () => {
     const selection = await open({ multiple: false, directory: false });
     if (!selection || Array.isArray(selection)) {
@@ -1090,19 +1103,17 @@ export function SettingsView({
 
   return (
     <div className="settings-embedded">
-      <div className="settings-header">
-        <div className="settings-title">{t("settings.title")}</div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label={t("settings.closeSettings")}
-        >
-          <X aria-hidden />
-        </Button>
-      </div>
       <div className="settings-body">
         <aside className="settings-sidebar">
+            <button
+              type="button"
+              className="settings-nav settings-nav-return"
+              onClick={onClose}
+              aria-label={t("settings.backToApp")}
+            >
+              <ArrowLeft aria-hidden />
+              {t("settings.backToApp")}
+            </button>
             <button
               type="button"
               className={`settings-nav ${activeSection === "vendors" ? "active" : ""}`}
@@ -1143,14 +1154,16 @@ export function SettingsView({
               <span className="codicon codicon-robot" />
               {t("settings.sidebarAgents")}
             </button>
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "dictation" ? "active" : ""}`}
-              onClick={() => setActiveSection("dictation")}
-            >
-              <Mic aria-hidden />
-              {t("settings.sidebarDictation")}
-            </button>
+            {SHOW_DICTATION_ENTRY && (
+              <button
+                type="button"
+                className={`settings-nav ${activeSection === "dictation" ? "active" : ""}`}
+                onClick={() => setActiveSection("dictation")}
+              >
+                <Mic aria-hidden />
+                {t("settings.sidebarDictation")}
+              </button>
+            )}
             <button
               type="button"
               className={`settings-nav ${activeSection === "shortcuts" ? "active" : ""}`}
@@ -1167,14 +1180,16 @@ export function SettingsView({
               <ExternalLink aria-hidden />
               {t("settings.sidebarOpenIn")}
             </button>
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "git" ? "active" : ""}`}
-              onClick={() => setActiveSection("git")}
-            >
-              <GitBranch aria-hidden />
-              {t("settings.sidebarGit")}
-            </button>
+            {SHOW_GIT_ENTRY && (
+              <button
+                type="button"
+                className={`settings-nav ${activeSection === "git" ? "active" : ""}`}
+                onClick={() => setActiveSection("git")}
+              >
+                <GitBranch aria-hidden />
+                {t("settings.sidebarGit")}
+              </button>
+            )}
             {SHOW_CODEX_AND_EXPERIMENTAL && (
               <>
                 <button
@@ -1823,6 +1838,63 @@ export function SettingsView({
                 <div className="settings-section-subtitle">
                   {t("settings.composerDescription")}
                 </div>
+                <div className="settings-subsection-title">{t("settings.sendShortcutSubtitle")}</div>
+                <div className="settings-subsection-subtitle">
+                  {t("settings.sendShortcutSubDescription")}
+                </div>
+                <div
+                  className="settings-send-shortcut-grid"
+                  role="radiogroup"
+                  aria-label={t("settings.sendShortcutSubtitle")}
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={appSettings.composerSendShortcut === "enter"}
+                    className={`settings-send-shortcut-option${
+                      appSettings.composerSendShortcut === "enter" ? " is-active" : ""
+                    }`}
+                    onClick={() => handleComposerSendShortcutChange("enter")}
+                  >
+                    <div className="settings-send-shortcut-option-title-row">
+                      <span className="settings-send-shortcut-option-title">
+                        {t("settings.sendShortcutEnterTitle")}
+                      </span>
+                      {appSettings.composerSendShortcut === "enter" && (
+                        <span className="settings-send-shortcut-option-check" aria-hidden>
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <span className="settings-send-shortcut-option-desc">
+                      {t("settings.sendShortcutEnterDesc")}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={appSettings.composerSendShortcut === "cmdEnter"}
+                    className={`settings-send-shortcut-option${
+                      appSettings.composerSendShortcut === "cmdEnter" ? " is-active" : ""
+                    }`}
+                    onClick={() => handleComposerSendShortcutChange("cmdEnter")}
+                  >
+                    <div className="settings-send-shortcut-option-title-row">
+                      <span className="settings-send-shortcut-option-title">
+                        {t("settings.sendShortcutCmdEnterTitle")}
+                      </span>
+                      {appSettings.composerSendShortcut === "cmdEnter" && (
+                        <span className="settings-send-shortcut-option-check" aria-hidden>
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <span className="settings-send-shortcut-option-desc">
+                      {t("settings.sendShortcutCmdEnterDesc")}
+                    </span>
+                  </button>
+                </div>
+                <Separator className="my-4" />
                 <div className="settings-subsection-title">{t("settings.presetsSubtitle")}</div>
                 <div className="settings-subsection-subtitle">
                   {t("settings.presetsSubDescription")}

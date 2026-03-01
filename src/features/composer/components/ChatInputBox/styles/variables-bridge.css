@@ -35,6 +35,8 @@
   --context-bar-bg: var(--surface-control, #27272e);
   --attachment-bg: var(--surface-control, #27272e);
   --attachment-border: var(--border-muted, #353540);
+  --token-ring-track: rgba(255, 255, 255, 0.28);
+  --token-ring-fill: var(--accent-strong, #60a5fa);
 }
 
 /* Override ChatInputBox light theme to match codemoss */
@@ -60,6 +62,8 @@
   --toolbar-bg: color-mix(in srgb, var(--surface-messages, #ffffff) 88%, var(--surface-control, rgba(15, 23, 36, 0.08)));
   --attachment-bg: color-mix(in srgb, var(--surface-messages, #ffffff) 90%, var(--surface-control, rgba(15, 23, 36, 0.06)));
   --attachment-border: color-mix(in srgb, var(--border-strong, rgba(15, 23, 36, 0.14)) 80%, transparent);
+  --token-ring-track: rgba(15, 23, 42, 0.28);
+  --token-ring-fill: #4d8ff0;
 }
 
 @media (prefers-color-scheme: light) {
@@ -85,5 +89,7 @@
     --toolbar-bg: color-mix(in srgb, var(--surface-messages, #ffffff) 88%, var(--surface-control, rgba(15, 23, 36, 0.08)));
     --attachment-bg: color-mix(in srgb, var(--surface-messages, #ffffff) 90%, var(--surface-control, rgba(15, 23, 36, 0.06)));
     --attachment-border: color-mix(in srgb, var(--border-strong, rgba(15, 23, 36, 0.14)) 80%, transparent);
+    --token-ring-track: rgba(15, 23, 42, 0.28);
+    --token-ring-fill: #4d8ff0;
   }
 }

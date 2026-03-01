@@ -2,6 +2,11 @@
   gap: 10px;
 }
 
+.app.reduced-transparency .file-tree-panel {
+  border-radius: 0;
+  border-left: none;
+}
+
 .file-tree-count {
   font-size: 11px;
   color: var(--text-faint);

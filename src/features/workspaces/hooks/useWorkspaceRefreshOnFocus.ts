@@ -3,6 +3,7 @@ import type { WorkspaceInfo } from "../../../types";
 
 type WorkspaceRefreshOptions = {
   workspaces: WorkspaceInfo[];
+  activeWorkspaceId: string | null;
   refreshWorkspaces: () => Promise<WorkspaceInfo[] | void>;
   listThreadsForWorkspace: (
     workspace: WorkspaceInfo,
@@ -12,6 +13,7 @@ type WorkspaceRefreshOptions = {
 
 export function useWorkspaceRefreshOnFocus({
   workspaces,
+  activeWorkspaceId,
   refreshWorkspaces,
   listThreadsForWorkspace,
 }: WorkspaceRefreshOptions) {
@@ -28,8 +30,19 @@ export function useWorkspaceRefreshOnFocus({
           // Silent: refresh errors show in debug panel.
         }
         const connected = latestWorkspaces.filter((entry) => entry.connected);
+        const visible = connected.filter((workspace) => {
+          if (workspace.id === activeWorkspaceId) {
+            return true;
+          }
+          return !workspace.settings.sidebarCollapsed;
+        });
+        const active = visible.find((w) => w.id === activeWorkspaceId);
+        const rest = visible.filter((w) => w.id !== activeWorkspaceId);
+        if (active) {
+          await listThreadsForWorkspace(active, { preserveState: true });
+        }
         await Promise.allSettled(
-          connected.map((workspace) =>
+          rest.map((workspace) =>
             listThreadsForWorkspace(workspace, { preserveState: true }),
           ),
         );
@@ -48,5 +61,5 @@ export function useWorkspaceRefreshOnFocus({
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [listThreadsForWorkspace, refreshWorkspaces, workspaces]);
+  }, [activeWorkspaceId, listThreadsForWorkspace, refreshWorkspaces, workspaces]);
 }

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeClientStoreValue } from "../../../services/clientStorage";
 import { useResizablePanels } from "./useResizablePanels";
 
@@ -46,8 +46,13 @@ function renderResizablePanels(): RenderedHook {
 
 describe("useResizablePanels", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.mocked(writeClientStoreValue).mockClear();
     document.body.innerHTML = "";
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("reads stored sizes and clamps to bounds", () => {
@@ -75,13 +80,16 @@ describe("useResizablePanels", () => {
       hook.result.onSidebarResizeStart({
         clientX: 0,
         clientY: 0,
-      } as React.MouseEvent);
+        button: 0,
+        preventDefault: vi.fn(),
+      } as unknown as React.MouseEvent);
     });
 
     act(() => {
       window.dispatchEvent(
         new MouseEvent("mousemove", { clientX: 4000, clientY: 0 }),
       );
+      vi.runAllTimers();
     });
 
     expect(hook.result.sidebarWidth).toBe(360);
@@ -89,6 +97,39 @@ describe("useResizablePanels", () => {
       "layout",
       "sidebarWidth",
       360,
+    );
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent("mouseup"));
+    });
+
+    hook.unmount();
+  });
+
+  it("persists sidebar width changes and clamps min", () => {
+    const hook = renderResizablePanels();
+
+    act(() => {
+      hook.result.onSidebarResizeStart({
+        clientX: 0,
+        clientY: 0,
+        button: 0,
+        preventDefault: vi.fn(),
+      } as unknown as React.MouseEvent);
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: -4000, clientY: 0 }),
+      );
+      vi.runAllTimers();
+    });
+
+    expect(hook.result.sidebarWidth).toBe(210);
+    expect(writeClientStoreValue).toHaveBeenCalledWith(
+      "layout",
+      "sidebarWidth",
+      210,
     );
 
     act(() => {

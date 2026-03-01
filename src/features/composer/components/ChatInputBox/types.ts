@@ -171,6 +171,15 @@ export interface SelectedAgent {
   prompt?: string;
 }
 
+/**
+ * Selected S+/M+ chip information
+ */
+export interface ContextSelectionChip {
+  type: 'skill' | 'commons';
+  name: string;
+  description?: string;
+}
+
 // ============================================================
 // Mode and Model Types
 // ============================================================
@@ -494,6 +503,10 @@ export interface ChatInputBoxProps {
 
   /** Currently selected agent */
   selectedAgent?: SelectedAgent | null;
+  /** Selected S+/M+ chips rendered in context bar */
+  selectedContextChips?: ContextSelectionChip[];
+  /** Remove selected S+/M+ chip callback */
+  onRemoveContextChip?: (chip: ContextSelectionChip) => void;
   /** Select agent callback */
   onAgentSelect?: (agent: SelectedAgent | null) => void;
   /** Clear agent callback */
@@ -509,6 +522,8 @@ export interface ChatInputBoxProps {
   hasMessages?: boolean;
   /** Rewind file callback */
   onRewind?: () => void;
+  /** Whether to show rewind entry in context bar */
+  showRewindEntry?: boolean;
 
   /** Whether StatusPanel is expanded */
   statusPanelExpanded?: boolean;
@@ -580,6 +595,8 @@ export interface ButtonAreaProps {
   streamingEnabled?: boolean;
   /** Toggle streaming */
   onStreamingEnabledChange?: (enabled: boolean) => void;
+  /** Send shortcut setting */
+  sendShortcut?: 'enter' | 'cmdEnter';
   /** Currently selected agent */
   selectedAgent?: SelectedAgent | null;
   /** Agent selection callback */

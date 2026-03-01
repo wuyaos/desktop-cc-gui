@@ -41,7 +41,7 @@ const zh = {
   // 应用
   app: {
     title: "MossX",
-    subtitle: "下一代VibeCoding，何必用IDE",
+    subtitle: "下一代 VibeCoding编辑器",
   },
 
   searchPalette: {
@@ -154,8 +154,9 @@ const zh = {
     showThreadsSidebar: "显示对话侧边栏",
     hideGitSidebar: "隐藏右侧边栏",
     showGitSidebar: "显示右侧边栏",
-    quickNewThread: "对话",
-    quickAutomation: "面板",
+    quickNewThread: "对话模式",
+    quickAutomation: "面板模式",
+    quickSearch: "搜索",
     quickSkills: "技能",
     threadsSection: "项目",
   },
@@ -360,6 +361,7 @@ const zh = {
 
     // 通用操作
     closeSettings: "关闭设置",
+    backToApp: "返回应用",
     saving: "保存中...",
     reset: "重置",
     clear: "清除",
@@ -428,6 +430,12 @@ const zh = {
     // Composer 部分
     composerTitle: "编辑器",
     composerDescription: "控制消息编辑器内的辅助功能和格式化行为。",
+    sendShortcutSubtitle: "发送快捷键",
+    sendShortcutSubDescription: "选择消息发送与换行的按键行为。",
+    sendShortcutEnterTitle: "Enter 发送",
+    sendShortcutEnterDesc: "按 Enter 发送消息，Shift+Enter 换行。",
+    sendShortcutCmdEnterTitle: "⌘/Ctrl+Enter 发送",
+    sendShortcutCmdEnterDesc: "按 ⌘/Ctrl+Enter 发送消息，Enter 换行。",
     presetsSubtitle: "预设",
     presetsSubDescription: "选择一个起点并微调下面的开关。",
     preset: "预设",
@@ -766,7 +774,7 @@ const zh = {
     collapseToolCalls: "收起工具调用",
     message: "条消息",
     messages: "条消息",
-    emptyThread: "开始一个对话，向智能体发送提示词。",
+    emptyThread: "今天想构建什么？向AI提问吧",
     generatingResponse: "正在生成响应...",
     nonStreamingHint: "该模型可能非流式返回，或网络暂不可达，请稍候...",
     opencodeHeartbeatPulse: "心跳 {{pulse}}：{{hint}}",
@@ -787,6 +795,7 @@ const zh = {
     anchorNavigation: "消息锚点",
     anchorJumpToUser: "跳转到用户消息 {{index}}",
     anchorUserTitle: "用户 #{{index}}",
+    showEarlierMessages: "显示之前的 {{count}} 条消息",
   },
 
   // 编辑器
@@ -1508,7 +1517,7 @@ const zh = {
   // 关于
   about: {
     version: "版本",
-    tagline: "下一代 VibeCoding，何必用 IDE",
+    tagline: "下一代 VibeCoding编辑器",
     checkForUpdates: "检查更新",
     releaseNotes: "发布说明",
     reportIssue: "报告问题",
@@ -2765,7 +2774,7 @@ const zh = {
     elementsTitle: "界面元素介绍",
     elementsDesc: "锁屏页可直接回看核心模块职责，便于团队协作时统一认知。",
     unlockTitle: "解锁面板",
-    unlockDesc: "默认密码文件为 ~/.codemoss/client/pwd.txt，默认值 123456。若文件缺失将允许解锁并自动创建默认密码文件。",
+    unlockDesc: "密码文件为 ~/.codemoss/client/pwd.txt。若文件缺失将允许解锁并自动创建默认密码文件。",
     passwordInput: "输入解锁密码",
     passwordPlaceholder: "请输入密码",
     passwordHint: "输入密码后按 Enter 或点击按钮解锁。",
@@ -2904,8 +2913,9 @@ const zh = {
     sendMessage: "给 {{provider}} 发送消息",
     inputPlaceholder: "@引用文件，#唤起智能体，!插入提示词，Enter 发送",
     inputPlaceholderEnter: "@引用文件，#唤起智能体，!插入提示词，Enter 发送",
-    inputPlaceholderCmdEnter: "@引用文件，#唤起智能体，!插入提示词，\u2318Enter 发送",
+    inputPlaceholderCmdEnter: "@引用文件，#唤起智能体，!插入提示词，\u2318/Ctrl+Enter 发送",
     sendMessageEnter: "发送消息 (Enter)",
+    sendMessageCmdEnter: "发送消息 (\u2318/Ctrl+Enter)",
     currentMode: "当前模式: {{mode}}",
     currentModel: "当前模型: {{model}}",
     removeAttachment: "移除附件",
@@ -2937,6 +2947,7 @@ const zh = {
     retrying: "正在重试 ({{count}}/{{max}})...",
     removeAgent: "移除智能体",
     removeFileContext: "移除文件上下文",
+    removeContextSelection: "移除已选项",
     removeFromQueue: "从队列中移除",
     commands: {
       clear: "清空当前会话",

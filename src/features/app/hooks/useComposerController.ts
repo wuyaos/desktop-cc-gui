@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { startTransition, useCallback, useMemo, useState } from "react";
 import type {
   EngineType,
   MessageSendOptions,
@@ -124,10 +124,12 @@ export function useComposerController({
       if (!activeThreadId) {
         return;
       }
-      setComposerDraftsByThread((prev) => ({
-        ...prev,
-        [activeThreadId]: next,
-      }));
+      startTransition(() => {
+        setComposerDraftsByThread((prev) => ({
+          ...prev,
+          [activeThreadId]: next,
+        }));
+      });
     },
     [activeThreadId],
   );

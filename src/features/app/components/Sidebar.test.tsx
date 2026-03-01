@@ -15,6 +15,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.searchProjects": "Search projects",
         "sidebar.quickNewThread": "New Thread",
         "sidebar.quickAutomation": "Automation",
+        "sidebar.quickSearch": "Search",
         "sidebar.quickSkills": "Skills",
         "sidebar.projects": "Projects",
         "sidebar.mcpSkillsMarket": "MCP & Skills Market",
@@ -39,13 +40,6 @@ vi.mock("react-i18next", () => ({
       changeLanguage: vi.fn(),
     },
   }),
-}));
-
-const { pushErrorToastMock } = vi.hoisted(() => ({
-  pushErrorToastMock: vi.fn(),
-}));
-vi.mock("../../../services/toasts", () => ({
-  pushErrorToast: pushErrorToastMock,
 }));
 
 import { Sidebar } from "./Sidebar";
@@ -110,6 +104,7 @@ const baseProps = {
   onAppModeChange: vi.fn(),
   onOpenMemory: vi.fn(),
   onOpenProjectMemory: vi.fn(),
+  onOpenGlobalSearch: vi.fn(),
   onOpenSpecHub: vi.fn(),
   onOpenWorkspaceHome: vi.fn(),
 };
@@ -122,60 +117,37 @@ describe("Sidebar", () => {
     expect(screen.queryByLabelText("Search projects")).toBeNull();
   });
 
-  it("renders quick skills entry", () => {
+  it("hides quick skills entry", () => {
     render(<Sidebar {...baseProps} />);
-    expect(screen.getByRole("button", { name: "Skills" })).toBeTruthy();
-  });
-
-  it("shows coming soon toast when clicking the skills entry", () => {
-    const onOpenSpecHub = vi.fn();
-    pushErrorToastMock.mockClear();
-    render(<Sidebar {...baseProps} onOpenSpecHub={onOpenSpecHub} />);
-    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
-
-    expect(pushErrorToastMock).toHaveBeenCalledTimes(1);
-    expect(onOpenSpecHub).not.toHaveBeenCalled();
-  });
-
-  it("opens workspace home when no workspace is active", () => {
-    const onOpenWorkspaceHome = vi.fn();
-    render(
-      <Sidebar
-        {...baseProps}
-        activeWorkspaceId={null}
-        onOpenWorkspaceHome={onOpenWorkspaceHome}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Open home" }));
-
-    expect(onOpenWorkspaceHome).toHaveBeenCalledTimes(1);
-  });
-
-  it("opens workspace home when workspace is active", () => {
-    const onOpenWorkspaceHome = vi.fn();
-    render(
-      <Sidebar
-        {...baseProps}
-        activeWorkspaceId="workspace-1"
-        onOpenWorkspaceHome={onOpenWorkspaceHome}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Open home" }));
-
-    expect(onOpenWorkspaceHome).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Skills" })).toBeNull();
   });
 
   it("renders quick nav and workspace list containers", () => {
     const { container } = render(<Sidebar {...baseProps} />);
 
     expect(container.querySelector(".sidebar-primary-nav")).toBeTruthy();
-    expect(container.querySelector(".sidebar-quick-icon-strip")).toBeTruthy();
+    expect(container.querySelector(".sidebar-quick-icon-strip")).toBeNull();
     expect(container.querySelector(".sidebar-content-column")).toBeTruthy();
     expect(container.querySelector(".workspace-list")).toBeTruthy();
+    expect(container.querySelector(".sidebar-section-title-icon-image")).toBeNull();
   });
 
-  it("shows quick action entries in settings dropdown and triggers home action", () => {
-    const onOpenWorkspaceHome = vi.fn();
+  it("shows search entry and triggers callback", () => {
+    const onOpenGlobalSearch = vi.fn();
+    render(
+      <Sidebar
+        {...baseProps}
+        onOpenGlobalSearch={onOpenGlobalSearch}
+      />,
+    );
+
+    const searchButton = screen.getByRole("button", { name: "Search" });
+    fireEvent.click(searchButton);
+
+    expect(onOpenGlobalSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides chat/automation/open-home entries in settings dropdown", () => {
     const onToggleTerminal = vi.fn();
     const { container } = render(
       <Sidebar
@@ -183,7 +155,6 @@ describe("Sidebar", () => {
         showTerminalButton
         isTerminalOpen={false}
         onToggleTerminal={onToggleTerminal}
-        onOpenWorkspaceHome={onOpenWorkspaceHome}
       />,
     );
 
@@ -195,16 +166,15 @@ describe("Sidebar", () => {
     expect(dropdown).toBeTruthy();
     const menu = within(dropdown as HTMLElement);
 
-    expect(menu.getByRole("menuitem", { name: "New Thread" })).toBeTruthy();
-    expect(menu.getByRole("menuitem", { name: "Automation" })).toBeTruthy();
-    expect(menu.getByRole("menuitem", { name: "Skills" })).toBeTruthy();
+    expect(menu.queryByRole("menuitem", { name: "New Thread" })).toBeNull();
+    expect(menu.queryByRole("menuitem", { name: "Automation" })).toBeNull();
+    const skillsEntry = menu.getByRole("menuitem", { name: "Skills" });
+    expect((skillsEntry as HTMLButtonElement).disabled).toBe(true);
     expect(menu.getByRole("menuitem", { name: "Long-term Memory" })).toBeTruthy();
     expect(menu.getByRole("menuitem", { name: "Spec Hub" })).toBeTruthy();
     expect(menu.getByRole("menuitem", { name: "Project Memory" })).toBeTruthy();
-    expect(menu.getByRole("menuitem", { name: "Terminal" })).toBeTruthy();
+    expect(menu.queryByRole("menuitem", { name: "Terminal" })).toBeNull();
     expect(menu.getByRole("menuitem", { name: "Git" })).toBeTruthy();
-
-    fireEvent.click(menu.getByRole("menuitem", { name: "Open home" }));
-    expect(onOpenWorkspaceHome).toHaveBeenCalledTimes(1);
+    expect(menu.queryByRole("menuitem", { name: "Open home" })).toBeNull();
   });
 });

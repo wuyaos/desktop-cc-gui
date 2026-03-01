@@ -2,7 +2,7 @@ import React, { useRef, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
-import type { SelectedAgent } from './types';
+import type { ContextSelectionChip, SelectedAgent } from './types';
 import { sanitizeSvg } from './utils/sanitize';
 
 interface ContextBarProps {
@@ -15,6 +15,8 @@ interface ContextBarProps {
   onClearFile?: () => void;
   onAddAttachment?: (files: FileList) => void;
   selectedAgent?: SelectedAgent | null;
+  selectedContextChips?: ContextSelectionChip[];
+  onRemoveContextChip?: (chip: ContextSelectionChip) => void;
   onClearAgent?: () => void;
   /** Current provider (for conditional rendering) */
   currentProvider?: string;
@@ -22,6 +24,8 @@ interface ContextBarProps {
   hasMessages?: boolean;
   /** Rewind callback */
   onRewind?: () => void;
+  /** Whether to show rewind entry */
+  showRewindEntry?: boolean;
   /** Whether StatusPanel is expanded */
   statusPanelExpanded?: boolean;
   /** Whether to show StatusPanel toggle button */
@@ -36,14 +40,16 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   percentage = 0,
   usedTokens,
   maxTokens,
-  showUsage = true,
   onClearFile,
   onAddAttachment,
   selectedAgent,
+  selectedContextChips = [],
+  onRemoveContextChip,
   onClearAgent,
   currentProvider = 'claude',
   hasMessages = false,
   onRewind,
+  showRewindEntry = true,
   statusPanelExpanded = true,
   showStatusPanelToggle = true,
   onToggleStatusPanel,
@@ -96,17 +102,14 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           <span className="context-tool-label">{t('chat.attach')}</span>
         </button>
 
-        {/* Token Indicator */}
-        {showUsage && (
-          <div className="context-token-indicator">
-            <TokenIndicator
-              percentage={percentage}
-              usedTokens={usedTokens}
-              maxTokens={maxTokens}
-              size={14}
-            />
-          </div>
-        )}
+        <div className="context-token-indicator">
+          <TokenIndicator
+            percentage={percentage}
+            usedTokens={usedTokens}
+            maxTokens={maxTokens}
+            size={14}
+          />
+        </div>
         
         {/* Hidden file input */}
         <input
@@ -120,6 +123,29 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
         
         <div className="context-tool-divider" />
       </div>
+
+      {/* Selected Skill / Commons Chips */}
+      {selectedContextChips.map((chip) => (
+        <div
+          key={`${chip.type}:${chip.name}`}
+          className="context-item has-tooltip"
+          data-tooltip={chip.description || chip.name}
+          style={{ cursor: 'default' }}
+        >
+          <span
+            className={`codicon ${chip.type === 'skill' ? 'codicon-tools' : 'codicon-wrench'}`}
+            style={{ marginRight: 4 }}
+          />
+          <span className="context-text">
+            <span dir="ltr">{chip.name}</span>
+          </span>
+          <span
+            className="codicon codicon-close context-close"
+            onClick={() => onRemoveContextChip?.(chip)}
+            title={t('chat.removeContextSelection')}
+          />
+        </div>
+      ))}
 
       {/* Selected Agent Chip */}
       {selectedAgent && (
@@ -193,7 +219,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
         )}
 
         {/* Rewind button */}
-        {currentProvider === 'claude' && onRewind && (
+        {showRewindEntry && currentProvider === 'claude' && onRewind && (
           <button
             className="context-tool-btn context-tool-btn--labeled has-tooltip"
             onClick={onRewind}

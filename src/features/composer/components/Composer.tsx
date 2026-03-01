@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
+  ComposerSendShortcut,
   ComposerEditorSettings,
   ConversationItem,
   CustomCommandOption,
@@ -35,17 +36,12 @@ import { ChatInputBoxAdapter } from "./ChatInputBox/ChatInputBoxAdapter";
 import type { ChatInputBoxHandle } from "./ChatInputBox/ChatInputBoxAdapter";
 import { accessModeToPermissionMode, permissionModeToAccessMode } from "./ChatInputBox/types";
 import type { PermissionMode } from "./ChatInputBox/types";
-import type { SelectedAgent as ChatInputSelectedAgent } from "./ChatInputBox/types";
-import { ComposerQueue } from "./ComposerQueue";
-import { ComposerContextMenuPopover } from "./ComposerContextMenuPopover";
+import type {
+  ContextSelectionChip,
+  SelectedAgent as ChatInputSelectedAgent,
+} from "./ChatInputBox/types";
 import { StatusPanel } from "../../status-panel/components/StatusPanel";
 import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
-import ExternalLink from "lucide-react/dist/esm/icons/external-link";
-import CircleHelp from "lucide-react/dist/esm/icons/circle-help";
-import Hammer from "lucide-react/dist/esm/icons/hammer";
-import Wrench from "lucide-react/dist/esm/icons/wrench";
-import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import {
   assembleSinglePrompt,
   shouldAssemblePrompt,
@@ -129,6 +125,7 @@ type ComposerProps = {
   onInsertHandled?: (id: string) => void;
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
   editorSettings?: ComposerEditorSettings;
+  sendShortcut?: ComposerSendShortcut;
   textareaHeight?: number;
   onTextareaHeightChange?: (height: number) => void;
   dictationEnabled?: boolean;
@@ -220,45 +217,6 @@ type InlineFileReferenceSelection = {
 const EMPTY_ITEMS: ConversationItem[] = [];
 const COMPOSER_MIN_HEIGHT = 20;
 const COMPOSER_EXPAND_HEIGHT = 80;
-
-type PrefixOption = {
-  name: string;
-  description?: string;
-  source?: string;
-};
-
-type PrefixGroup = {
-  prefix: string;
-  options: PrefixOption[];
-};
-
-type SourceGroup = {
-  source: string;
-  label: string;
-  groups: PrefixGroup[];
-};
-
-const CONTEXT_SOURCE_ORDER = [
-  "workspace_managed",
-  "project_claude",
-  "project_codex",
-  "project_agents",
-  "global_claude",
-  "global_codex",
-  "global_agents",
-  "global",
-];
-
-const CONTEXT_SOURCE_LABELS: Record<string, string> = {
-  workspace_managed: "Managed Workspace",
-  project_claude: "Project .claude",
-  project_codex: "Project .codex",
-  project_agents: "Project .agents",
-  global_claude: "User .claude",
-  global_codex: "User .codex",
-  global_agents: "User .agents",
-  global: "User Global",
-};
 
 const MANUAL_MEMORY_USER_INPUT_REGEX =
   /(?:^|\n)\s*用户输入[:：]\s*([\s\S]*?)(?=\n+\s*(?:助手输出摘要|助手输出)[:：]|$)/;
@@ -390,90 +348,6 @@ function resolveManualMemoryChipDetail(memory: ManualMemorySelection) {
   return "";
 }
 
-function extractOptionPrefix(name: string) {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    return "Other";
-  }
-  if (trimmed.includes(":")) {
-    return trimmed.split(":")[0] || "Other";
-  }
-  if (trimmed.includes("-")) {
-    return trimmed.split("-")[0] || "Other";
-  }
-  return "Other";
-}
-
-function groupOptionsByPrefix(options: PrefixOption[]): PrefixGroup[] {
-  const grouped = new Map<string, PrefixOption[]>();
-  for (const option of options) {
-    const prefix = extractOptionPrefix(option.name);
-    const bucket = grouped.get(prefix) ?? [];
-    bucket.push(option);
-    grouped.set(prefix, bucket);
-  }
-  return Array.from(grouped.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([prefix, list]) => ({
-      prefix,
-      options: list.sort((a, b) => a.name.localeCompare(b.name)),
-    }));
-}
-
-function normalizeOptionSource(source: string | undefined) {
-  const normalized = source?.trim().toLowerCase();
-  if (!normalized) {
-    return "global";
-  }
-  return normalized;
-}
-
-function groupOptionsBySourceAndPrefix(options: PrefixOption[]): SourceGroup[] {
-  const grouped = new Map<string, PrefixOption[]>();
-  for (const option of options) {
-    const source = normalizeOptionSource(option.source);
-    const bucket = grouped.get(source) ?? [];
-    bucket.push(option);
-    grouped.set(source, bucket);
-  }
-
-  return Array.from(grouped.entries())
-    .sort((a, b) => {
-      const leftIndex = CONTEXT_SOURCE_ORDER.indexOf(a[0]);
-      const rightIndex = CONTEXT_SOURCE_ORDER.indexOf(b[0]);
-      const safeLeft = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
-      const safeRight = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
-      if (safeLeft !== safeRight) {
-        return safeLeft - safeRight;
-      }
-      return a[0].localeCompare(b[0]);
-    })
-    .map(([source, list]) => ({
-      source,
-      label: CONTEXT_SOURCE_LABELS[source] ?? source,
-      groups: groupOptionsByPrefix(list),
-    }));
-}
-
-function splitGroupsForColumns(groups: SourceGroup[]): [SourceGroup[], SourceGroup[]] {
-  const left: SourceGroup[] = [];
-  const right: SourceGroup[] = [];
-  let leftWeight = 0;
-  let rightWeight = 0;
-  for (const sourceGroup of groups) {
-    const groupWeight =
-      sourceGroup.groups.reduce((sum, group) => sum + group.options.length + 1, 0) + 1;
-    if (leftWeight <= rightWeight) {
-      left.push(sourceGroup);
-      leftWeight += groupWeight;
-    } else {
-      right.push(sourceGroup);
-      rightWeight += groupWeight;
-    }
-  }
-  return [left, right];
-}
-
 const OPENCODE_DIRECT_COMMANDS = new Set(["status", "mcp", "export", "share"]);
 
 function normalizeCommandChipName(name: string) {
@@ -481,23 +355,9 @@ function normalizeCommandChipName(name: string) {
   return token ? token.toLowerCase() : "";
 }
 
-function filterOptionsByQuery<T extends { name: string; description?: string }>(
-  options: T[],
-  query: string,
-): T[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  if (!normalizedQuery) {
-    return options;
-  }
-  return options.filter((option) => {
-    const searchableText = `${option.name} ${option.description ?? ""}`.toLocaleLowerCase();
-    return searchableText.includes(normalizedQuery);
-  });
-}
-
-export function Composer({
-  kanbanContextMode = "new",
-  onKanbanContextModeChange,
+export const Composer = memo(function Composer({
+  kanbanContextMode: _kanbanContextMode = "new",
+  onKanbanContextModeChange: _onKanbanContextModeChange,
   items = EMPTY_ITEMS,
   onSend,
   onQueue: _onQueue,
@@ -541,7 +401,6 @@ export function Composer({
   usageShowRemaining: _usageShowRemaining = false,
   onRefreshAccountRateLimits: _onRefreshAccountRateLimits,
   queuedMessages = [],
-  onEditQueued,
   onDeleteQueued,
   sendLabel: _sendLabel = "Send",
   draftText = "",
@@ -557,6 +416,7 @@ export function Composer({
   onInsertHandled,
   textareaRef: externalTextareaRef,
   editorSettings: _editorSettingsProp,
+  sendShortcut = "enter",
   textareaHeight = 80,
   onTextareaHeightChange,
   dictationEnabled: _dictationEnabled = false,
@@ -590,10 +450,10 @@ export function Composer({
   onReviewPromptConfirmCommit: _onReviewPromptConfirmCommit,
   onReviewPromptUpdateCustomInstructions: _onReviewPromptUpdateCustomInstructions,
   onReviewPromptConfirmCustom: _onReviewPromptConfirmCustom,
-  linkedKanbanPanels = [],
-  selectedLinkedKanbanPanelId = null,
-  onSelectLinkedKanbanPanel,
-  onOpenLinkedKanbanPanel,
+  linkedKanbanPanels: _linkedKanbanPanels = [],
+  selectedLinkedKanbanPanelId: _selectedLinkedKanbanPanelId = null,
+  onSelectLinkedKanbanPanel: _onSelectLinkedKanbanPanel,
+  onOpenLinkedKanbanPanel: _onOpenLinkedKanbanPanel,
   activeFilePath = null,
   activeFileLineRange = null,
   fileReferenceMode = "path",
@@ -606,6 +466,7 @@ export function Composer({
 }: ComposerProps) {
   const { t } = useTranslation();
   const isCodexEngine = selectedEngine === "codex";
+  const showStatusPanel = selectedEngine === "claude";
   const { todoTotal, subagentTotal, fileChanges, commandTotal } = useStatusPanelData(
     items,
     { isCodexEngine },
@@ -653,18 +514,6 @@ export function Composer({
   >("is-fail");
   const [openCodeProviderToneReady, _setOpenCodeProviderToneReady] = useState(false);
   // const [_openCodePanelOpenRequestNonce, _setOpenCodePanelOpenRequestNonce] = useState(0);
-  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
-  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
-  const [commonsMenuOpen, setCommonsMenuOpen] = useState(false);
-  const [skillSearchQuery, setSkillSearchQuery] = useState("");
-  const [commonsSearchQuery, setCommonsSearchQuery] = useState("");
-  const helpMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
-  const skillMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
-  const commonsMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
-  const kanbanPopoverAnchorRef = useRef<HTMLButtonElement | null>(null);
-  const pillsContainerRef = useRef<HTMLDivElement | null>(null);
-  const [kanbanPopoverOpen, setKanbanPopoverOpen] = useState(false);
-  const [visiblePillCount, setVisiblePillCount] = useState<number>(Infinity);
   const lastExpandedHeightRef = useRef(
     Math.max(textareaHeight, COMPOSER_EXPAND_HEIGHT),
   );
@@ -839,56 +688,22 @@ export function Composer({
   // const _requestOpenOpenCodePanel = useCallback(() => {
   //   setOpenCodePanelOpenRequestNonce((prev) => prev + 1);
   // }, []);
-  const availableSkills = skills.filter((skill) => !selectedSkillNames.includes(skill.name));
-  const availableCommons = commands.filter((item) => !selectedCommonsNames.includes(item.name));
-  const skillOptions = availableSkills.map((skill) => ({
-    name: skill.name,
-    description: skill.description,
-    source: skill.source,
-  }));
-  const commonsOptions = availableCommons.map((item) => ({
-    name: item.name,
-    description: item.description,
-    source: item.source,
-  }));
-  const filteredSkillOptions = filterOptionsByQuery(skillOptions, skillSearchQuery);
-  const filteredCommonsOptions = filterOptionsByQuery(commonsOptions, commonsSearchQuery);
-  const groupedSkillOptions = groupOptionsBySourceAndPrefix(filteredSkillOptions);
-  const groupedCommonsOptions = groupOptionsBySourceAndPrefix(filteredCommonsOptions);
-  const [skillLeftColumn, skillRightColumn] = splitGroupsForColumns(groupedSkillOptions);
-  const [commonsLeftColumn, commonsRightColumn] = splitGroupsForColumns(groupedCommonsOptions);
 
-  const allPills = useMemo(() => [
-    ...selectedSkills.map(s => ({ type: 'skill' as const, ...s })),
-    ...selectedCommons.map(c => ({ type: 'commons' as const, ...c })),
-  ], [selectedSkills, selectedCommons]);
-
-  useEffect(() => {
-    const container = pillsContainerRef.current;
-    if (!container || typeof ResizeObserver === "undefined") return;
-
-    const observer = new ResizeObserver(() => {
-      const children = Array.from(container.children) as HTMLElement[];
-      const containerRight = container.getBoundingClientRect().right;
-      let lastVisible = children.length;
-
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i];
-        if (child.classList.contains('composer-toolbar-overflow')) continue;
-        if (child.getBoundingClientRect().right > containerRight - 40) {
-          lastVisible = i;
-          break;
-        }
-      }
-      setVisiblePillCount(lastVisible);
-    });
-
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [allPills.length]);
-
-  const visiblePills = allPills.slice(0, visiblePillCount);
-  const overflowCount = Math.max(0, allPills.length - visiblePillCount);
+  const contextSelectionChips = useMemo<ContextSelectionChip[]>(
+    () => [
+      ...selectedSkills.map((skill) => ({
+        type: "skill" as const,
+        name: skill.name,
+        description: skill.description,
+      })),
+      ...selectedCommons.map((item) => ({
+        type: "commons" as const,
+        name: item.name,
+        description: item.description,
+      })),
+    ],
+    [selectedCommons, selectedSkills],
+  );
 
 
   useEffect(() => {
@@ -1269,110 +1084,19 @@ export function Composer({
   //   text,
   // ]);
 
-  const handleSelectLinkedPanel = useCallback(
-    (panelId: string) => {
-      const isTogglingOff = selectedLinkedKanbanPanelId === panelId;
-      onSelectLinkedKanbanPanel?.(isTogglingOff ? null : panelId);
-      requestAnimationFrame(() => {
-        const textarea = textareaRef.current;
-        if (!textarea) {
-          return;
-        }
-        textarea.focus();
-        const cursor = textarea.selectionStart ?? text.length;
-        textarea.setSelectionRange(cursor, cursor);
-        handleSelectionChange(cursor);
-      });
-    },
-    [
-      handleSelectionChange,
-      onSelectLinkedKanbanPanel,
-      selectedLinkedKanbanPanelId,
-      text,
-      textareaRef,
-    ],
-  );
-
   const handleRemoveManualMemory = useCallback((memoryId: string) => {
     setSelectedManualMemories((prev) =>
       prev.filter((entry) => entry.id !== memoryId),
     );
   }, []);
 
-  const selectedLinkedPanel = linkedKanbanPanels.find(
-    (panel) => panel.id === selectedLinkedKanbanPanelId,
-  );
-
-  const handlePickSkill = useCallback((name: string) => {
-    setSelectedSkillNames((prev) => (prev.includes(name) ? prev : [...prev, name]));
-    setSkillSearchQuery("");
-    setSkillMenuOpen(false);
+  const handleRemoveContextChip = useCallback((chip: ContextSelectionChip) => {
+    if (chip.type === "skill") {
+      setSelectedSkillNames((prev) => prev.filter((name) => name !== chip.name));
+      return;
+    }
+    setSelectedCommonsNames((prev) => prev.filter((name) => name !== chip.name));
   }, []);
-
-  const handlePickCommons = useCallback((name: string) => {
-    setSelectedCommonsNames((prev) => (prev.includes(name) ? prev : [...prev, name]));
-    setCommonsSearchQuery("");
-    setCommonsMenuOpen(false);
-  }, []);
-
-  const renderGroupedOptions = useCallback(
-    (
-      leftColumn: SourceGroup[],
-      rightColumn: SourceGroup[],
-      onPick: (name: string) => void,
-      emptyLabel: string,
-      keyPrefix: string,
-    ) => {
-      const renderColumn = (sourceGroups: SourceGroup[], columnKey: "left" | "right") => (
-        <div className="composer-context-menu-column" key={`${keyPrefix}-${columnKey}`}>
-          {sourceGroups.map((sourceGroup) => (
-            <section
-              key={`${keyPrefix}-${columnKey}-${sourceGroup.source}`}
-              className="composer-context-menu-source-group"
-            >
-              <header className="composer-context-menu-source-title">{sourceGroup.label}</header>
-              {sourceGroup.groups.map((group) => (
-                <section
-                  key={`${keyPrefix}-${columnKey}-${sourceGroup.source}-${group.prefix}`}
-                  className="composer-context-menu-group"
-                >
-                  <header className="composer-context-menu-group-title">{group.prefix}</header>
-                  <div className="composer-context-menu-group-items">
-                    {group.options.map((option) => (
-                      <button
-                        key={`${keyPrefix}-${columnKey}-${sourceGroup.source}-${group.prefix}-${option.name}`}
-                        type="button"
-                        className="composer-context-menu-item"
-                        onClick={() => onPick(option.name)}
-                        title={option.description}
-                      >
-                        <span className="composer-context-menu-item-name">{option.name}</span>
-                        <span className="composer-context-menu-item-desc">
-                          {option.description || "暂无描述"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </section>
-          ))}
-        </div>
-      );
-
-      if (leftColumn.length === 0 && rightColumn.length === 0) {
-        return <span className="composer-context-menu-empty">{emptyLabel}</span>;
-      }
-
-      return (
-        <>
-          {renderColumn(leftColumn, "left")}
-          {renderColumn(rightColumn, "right")}
-        </>
-      );
-    },
-    [],
-  );
 
   useEffect(() => {
     if (!prefillDraft) {
@@ -1547,20 +1271,17 @@ export function Composer({
 
   return (
     <footer className={`composer${disabled ? " is-disabled" : ""}`}>
-      <StatusPanel
-        items={items}
-        isProcessing={isProcessing}
-        expanded={statusPanelExpanded}
-        plan={plan}
-        isPlanMode={isPlanMode}
-        isCodexEngine={isCodexEngine}
-        onOpenDiffPath={onOpenDiffPath}
-      />
-      <ComposerQueue
-        queuedMessages={queuedMessages}
-        onEditQueued={onEditQueued}
-        onDeleteQueued={onDeleteQueued}
-      />
+      {showStatusPanel && (
+        <StatusPanel
+          items={items}
+          isProcessing={isProcessing}
+          expanded={statusPanelExpanded}
+          plan={plan}
+          isPlanMode={isPlanMode}
+          isCodexEngine={isCodexEngine}
+          onOpenDiffPath={onOpenDiffPath}
+        />
+      )}
       <div className={`composer-shell${isComposerCollapsed ? " is-collapsed" : ""}`}>
         {isComposerCollapsed ? (
           <button
@@ -1581,327 +1302,7 @@ export function Composer({
           </button>
         ) : (
           <>
-            {false && (<div
-          className="composer-management-toolbar"
-            >
-          <div className="composer-toolbar-left" data-pill-count={allPills.length > 0 ? `+${allPills.length}` : undefined}>
-            <div className="composer-context-actions">
-              <div className="composer-context-menu">
-                <button
-                  ref={helpMenuAnchorRef}
-                  type="button"
-                  className="composer-context-action-btn composer-context-action-btn--help"
-                  onClick={() => {
-                    setHelpMenuOpen((prev) => !prev);
-                    setSkillMenuOpen(false);
-                    setCommonsMenuOpen(false);
-                  }}
-                  disabled={disabled}
-                  aria-label="管理面板使用说明"
-                >
-                  <span className="composer-context-action-icon" aria-hidden>
-                    <CircleHelp size={12} />
-                  </span>
-                </button>
-                <ComposerContextMenuPopover
-                  open={helpMenuOpen}
-                  anchorRef={helpMenuAnchorRef}
-                  onClose={() => setHelpMenuOpen(false)}
-                  panelClassName="composer-context-menu-panel--help"
-                  panelProps={{ role: "dialog", "aria-label": "管理面板说明" }}
-                >
-                  <div className="composer-context-menu-head">
-                    <span className="composer-context-menu-title">管理面板使用说明</span>
-                    <span className="composer-context-menu-meta">面向 Skill / Commons / 看板联动</span>
-                  </div>
-                  <div className="composer-context-help-grid">
-                    <section className="composer-context-help-section">
-                      <h4>按钮含义</h4>
-                      <ul>
-                        <li>
-                          <strong>+S</strong>：添加 Skill（专家视角），如 Review / Debug / Doc。
-                        </li>
-                        <li>
-                          <strong>+M</strong>：添加 Commons（长期规则），如项目约束、团队规范。
-                        </li>
-                        <li>
-                          <strong>S / M / K</strong>：已选 Skill / Commons / 关联看板标识。
-                        </li>
-                        <li>
-                          <strong>K link</strong>：打开对应看板页面；切换不同 K 即切换上下文来源。
-                        </li>
-                      </ul>
-                    </section>
-                    <section className="composer-context-help-section">
-                      <h4>推荐用法</h4>
-                      <ol>
-                        <li>先选 1-2 个 Skill，确定分析角度。</li>
-                        <li>再补 1-2 个 Commons，限制输出边界。</li>
-                        <li>需要结合项目状态时，再选择关联看板 (K)。</li>
-                      </ol>
-                    </section>
-                    <section className="composer-context-help-section">
-                      <h4>看板与会话模式</h4>
-                      <ul>
-                        <li>
-                          <strong>K 选中效果</strong>：被选中的看板会作为当前上下文来源，发送时优先绑定该看板。
-                        </li>
-                        <li>
-                          <strong>新会话</strong>：仅使用当前输入 + 已选 S/M/K，不继承上一次该看板会话内容。
-                        </li>
-                        <li>
-                          <strong>继承当前</strong>：继续该看板的当前会话，保留已有上下文与历史推理链路。
-                        </li>
-                        <li>
-                          <strong>选中态 icon</strong>：当前生效模式前会显示绿色勾选 icon，便于快速确认。
-                        </li>
-                      </ul>
-                    </section>
-                    <section className="composer-context-help-section composer-context-help-section--wide">
-                      <h4>发送时自动拼装（对用户透明）</h4>
-                      <pre className="composer-context-help-example">
-{`/skill-name /commons-name 你的自然语言问题
-示例：/tr-zh-en-jp /AI-REACH:Auto 我要睡觉`}
-                      </pre>
-                    </section>
-                  </div>
-                  <div className="composer-context-menu-foot">
-                    目标：你只写问题，系统负责结构化 Prompt 组装。
-                  </div>
-                </ComposerContextMenuPopover>
-              </div>
-
-              <div className="composer-context-menu">
-                <button
-                  ref={skillMenuAnchorRef}
-                  type="button"
-                  className="composer-context-action-btn composer-context-action-btn--skill"
-                  onClick={() => {
-                    setSkillMenuOpen((prev) => !prev);
-                    setHelpMenuOpen(false);
-                    setCommonsMenuOpen(false);
-                    setCommonsSearchQuery("");
-                  }}
-                  disabled={disabled}
-                >
-                  <span className="composer-context-action-icon" aria-hidden>
-                    <Hammer size={12} />
-                  </span>
-                  <span>S+</span>
-                </button>
-                <ComposerContextMenuPopover
-                  open={skillMenuOpen}
-                  anchorRef={skillMenuAnchorRef}
-                  onClose={() => setSkillMenuOpen(false)}
-                  panelClassName={skillSearchQuery.trim() ? "is-searching" : undefined}
-                >
-                  <div className="composer-context-menu-sticky">
-                    <div className="composer-context-menu-head">
-                      <span className="composer-context-menu-title">选择 Skill</span>
-                      <span className="composer-context-menu-meta">
-                        {filteredSkillOptions.length} 个可选
-                      </span>
-                    </div>
-                    <div className="composer-context-menu-search">
-                      <input
-                        type="text"
-                        className="composer-context-menu-search-input"
-                        value={skillSearchQuery}
-                        onChange={(event) => setSkillSearchQuery(event.target.value)}
-                        placeholder="搜索 Skill（名称或描述）"
-                        aria-label="搜索 Skill"
-                      />
-                    </div>
-                  </div>
-                  <div className="composer-context-menu-grid" role="listbox" aria-label="Skill options">
-                    {renderGroupedOptions(
-                      skillLeftColumn,
-                      skillRightColumn,
-                      handlePickSkill,
-                      "没有可选 Skill",
-                      "skill",
-                    )}
-                  </div>
-                  <div className="composer-context-menu-foot">点击一项立即添加</div>
-                </ComposerContextMenuPopover>
-              </div>
-
-              <div className="composer-context-menu">
-                <button
-                  ref={commonsMenuAnchorRef}
-                  type="button"
-                  className="composer-context-action-btn composer-context-action-btn--commons"
-                  onClick={() => {
-                    setCommonsMenuOpen((prev) => !prev);
-                    setHelpMenuOpen(false);
-                    setSkillMenuOpen(false);
-                    setSkillSearchQuery("");
-                  }}
-                  disabled={disabled}
-                >
-                  <span className="composer-context-action-icon" aria-hidden>
-                    <Wrench size={12} />
-                  </span>
-                  <span>M+</span>
-                </button>
-                <ComposerContextMenuPopover
-                  open={commonsMenuOpen}
-                  anchorRef={commonsMenuAnchorRef}
-                  onClose={() => setCommonsMenuOpen(false)}
-                  panelClassName={commonsSearchQuery.trim() ? "is-searching" : undefined}
-                >
-                  <div className="composer-context-menu-sticky">
-                    <div className="composer-context-menu-head">
-                      <span className="composer-context-menu-title">选择 Commons</span>
-                      <span className="composer-context-menu-meta">
-                        {filteredCommonsOptions.length} 个可选
-                      </span>
-                    </div>
-                    <div className="composer-context-menu-search">
-                      <input
-                        type="text"
-                        className="composer-context-menu-search-input"
-                        value={commonsSearchQuery}
-                        onChange={(event) => setCommonsSearchQuery(event.target.value)}
-                        placeholder="搜索 Commons（名称或描述）"
-                        aria-label="搜索 Commons"
-                      />
-                    </div>
-                  </div>
-                  <div
-                    className="composer-context-menu-grid"
-                    role="listbox"
-                    aria-label="Commons options"
-                  >
-                    {renderGroupedOptions(
-                      commonsLeftColumn,
-                      commonsRightColumn,
-                      handlePickCommons,
-                      "没有可选 Commons",
-                      "commons",
-                    )}
-                  </div>
-                  <div className="composer-context-menu-foot">点击一项立即添加</div>
-                </ComposerContextMenuPopover>
-              </div>
-            </div>
-            {allPills.length > 0 && (
-                <div ref={pillsContainerRef} className="composer-toolbar-pills">
-                  {visiblePills.map((pill) => (
-                    <button
-                      key={pill.type === 'skill' ? `collapsed-skill-${pill.name}` : `collapsed-commons-${pill.name}`}
-                      type="button"
-                      className={`composer-collapsed-pill composer-collapsed-pill--${pill.type}`}
-                      onClick={() =>
-                        pill.type === 'skill'
-                          ? setSelectedSkillNames((prev) => prev.filter((name) => name !== pill.name))
-                          : setSelectedCommonsNames((prev) => prev.filter((name) => name !== pill.name))
-                      }
-                      title={pill.description}
-                    >
-                      <span className="composer-collapsed-pill-kind" aria-hidden>
-                        {pill.type === 'skill' ? <Hammer size={10} /> : <Wrench size={10} />}
-                      </span>
-                      <span>{pill.name}</span>
-                      <span aria-hidden>×</span>
-                    </button>
-                  ))}
-                  {overflowCount > 0 && (
-                    <span className="composer-toolbar-overflow">+{overflowCount}</span>
-                  )}
-                </div>
-              )}
-          </div>
-
-          {linkedKanbanPanels.length > 0 && (
-            <div className="composer-toolbar-right">
-              <button
-                ref={kanbanPopoverAnchorRef}
-                type="button"
-                className={`composer-kanban-trigger${selectedLinkedPanel ? " is-active" : ""}`}
-                onClick={() => setKanbanPopoverOpen(prev => !prev)}
-              >
-                <span className="composer-kanban-trigger-icon" aria-hidden>
-                  <ClipboardList size={10} />
-                </span>
-                <span>{selectedLinkedPanel?.name ?? linkedKanbanPanels[0].name}</span>
-                <ChevronDown size={10} />
-              </button>
-              {selectedLinkedPanel && (
-                <button
-                  type="button"
-                  className="composer-kanban-trigger-link"
-                  aria-label={t("kanban.composer.openPanel")}
-                  onClick={() => {
-                    if (selectedLinkedPanel) onOpenLinkedKanbanPanel?.(selectedLinkedPanel.id);
-                  }}
-                >
-                  <ExternalLink size={10} />
-                </button>
-              )}
-
-              <ComposerContextMenuPopover
-                open={kanbanPopoverOpen}
-                anchorRef={kanbanPopoverAnchorRef}
-                onClose={() => setKanbanPopoverOpen(false)}
-                panelClassName="composer-kanban-popover"
-              >
-                <div className="composer-kanban-popover-title">
-                  {t("kanban.composer.relatedPanels")}
-                </div>
-                {linkedKanbanPanels.map((panel) => (
-                  <div
-                    className={`composer-kanban-popover-item${
-                      panel.id === selectedLinkedKanbanPanelId ? " is-active" : ""
-                    }`}
-                    key={panel.id}
-                  >
-                    <button
-                      type="button"
-                      className="composer-kanban-popover-select"
-                      onClick={() => {
-                        handleSelectLinkedPanel(panel.id);
-                      }}
-                    >
-                      <span className="composer-kanban-popover-radio">
-                        {panel.id === selectedLinkedKanbanPanelId ? "●" : "○"}
-                      </span>
-                      {panel.name}
-                    </button>
-                    <button
-                      type="button"
-                      className="composer-kanban-popover-link"
-                      onClick={() => onOpenLinkedKanbanPanel?.(panel.id)}
-                    >
-                      <ExternalLink size={12} />
-                    </button>
-                  </div>
-                ))}
-                {selectedLinkedPanel && (
-                  <div className="composer-kanban-popover-mode">
-                    <span className="composer-kanban-mode-label">{t("kanban.composer.contextModeLabel")}</span>
-                    <div className="composer-kanban-mode-group">
-                      <button
-                        type="button"
-                        className={`composer-kanban-mode-btn${kanbanContextMode === "new" ? " is-active" : ""}`}
-                        onClick={() => onKanbanContextModeChange?.("new")}
-                      >
-                        {t("kanban.composer.contextModeNew")}
-                      </button>
-                      <button
-                        type="button"
-                        className={`composer-kanban-mode-btn${kanbanContextMode === "inherit" ? " is-active" : ""}`}
-                        onClick={() => onKanbanContextModeChange?.("inherit")}
-                      >
-                        {t("kanban.composer.contextModeInherit")}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </ComposerContextMenuPopover>
-            </div>
-          )}
-        </div>)}
+          {/* Management toolbar (help, skill, commons, kanban) removed -- was disabled with {false && ...} */}
 
         {selectedManualMemories.length > 0 && (
           <div className="composer-memory-strip">
@@ -1992,19 +1393,27 @@ export function Composer({
           files={files}
           directories={directories}
           commands={commands}
-          placeholder={t("chat.inputPlaceholderEnter")}
+          sendShortcut={sendShortcut}
+          placeholder={
+            sendShortcut === "cmdEnter"
+              ? t("chat.inputPlaceholderCmdEnter")
+              : t("chat.inputPlaceholderEnter")
+          }
           activeFile={hasActiveFileReference ? (activeFilePath ?? undefined) : undefined}
           selectedLines={hasActiveFileReference ? activeFileLinesLabel : undefined}
           onClearContext={hasActiveFileReference ? handleClearContext : undefined}
           selectedAgent={selectedChatInputAgent}
+          selectedContextChips={contextSelectionChips}
+          onRemoveContextChip={handleRemoveContextChip}
           onAgentSelect={handleAgentSelect}
           onOpenAgentSettings={onOpenAgentSettings}
           permissionMode={accessModeToPermissionMode(accessMode)}
           onModeSelect={handleModeSelect}
           hasMessages={items.length > 0}
           onRewind={handleRewind}
+          showRewindEntry={false}
           statusPanelExpanded={statusPanelExpanded}
-          showStatusPanelToggle
+          showStatusPanelToggle={showStatusPanel}
           onToggleStatusPanel={handleToggleStatusPanel}
         />
           </>
@@ -2012,4 +1421,4 @@ export function Composer({
       </div>
     </footer>
   );
-}
+});

@@ -31,10 +31,9 @@ describe("model mapping", () => {
     ).toBe("Opus 4.6");
 
     expect(
-      applyModelMapping("Opus (1M context)", "claude-opus-4-6-1m", {
+      applyModelMapping("Opus (1M context)", "claude-opus-4-6[1m]", {
         opus: "glm-4.7",
       }),
     ).toBe("Opus (1M context)");
   });
 });
-

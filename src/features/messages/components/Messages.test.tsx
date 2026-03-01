@@ -743,6 +743,90 @@ describe("Messages", () => {
     );
   });
 
+  it("collapses earlier items and reveals them on demand", () => {
+    const items: ConversationItem[] = Array.from({ length: 17 }, (_, index) => ({
+      id: `history-item-${index + 1}`,
+      kind: "message",
+      role: index % 2 === 0 ? "user" : "assistant",
+      text: `history message ${index + 1}`,
+    }));
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-history-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.queryByText("history message 1")).toBeNull();
+    expect(screen.getByText("history message 3")).toBeTruthy();
+    expect(screen.getByText("history message 17")).toBeTruthy();
+
+    const indicator = container.querySelector(".messages-collapsed-indicator");
+    expect(indicator).toBeTruthy();
+    expect(indicator?.getAttribute("data-collapsed-count")).toBe("2");
+    if (!indicator) {
+      return;
+    }
+    fireEvent.click(indicator);
+
+    expect(screen.getByText("history message 1")).toBeTruthy();
+    expect(container.querySelector(".messages-collapsed-indicator")).toBeNull();
+  });
+
+  it("resets collapsed state when conversation head changes", () => {
+    const firstBatch: ConversationItem[] = Array.from({ length: 17 }, (_, index) => ({
+      id: `session-a-${index + 1}`,
+      kind: "message",
+      role: index % 2 === 0 ? "user" : "assistant",
+      text: `session A message ${index + 1}`,
+    }));
+    const secondBatch: ConversationItem[] = Array.from({ length: 17 }, (_, index) => ({
+      id: `session-b-${index + 1}`,
+      kind: "message",
+      role: index % 2 === 0 ? "user" : "assistant",
+      text: `session B message ${index + 1}`,
+    }));
+
+    const { container, rerender } = render(
+      <Messages
+        items={firstBatch}
+        threadId="thread-history-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const firstIndicator = container.querySelector(".messages-collapsed-indicator");
+    expect(firstIndicator).toBeTruthy();
+    if (firstIndicator) {
+      fireEvent.click(firstIndicator);
+    }
+    expect(screen.getByText("session A message 1")).toBeTruthy();
+
+    rerender(
+      <Messages
+        items={secondBatch}
+        threadId="thread-history-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.queryByText("session B message 1")).toBeNull();
+    const secondIndicator = container.querySelector(".messages-collapsed-indicator");
+    expect(secondIndicator).toBeTruthy();
+    expect(secondIndicator?.getAttribute("data-collapsed-count")).toBe("2");
+  });
+
   it("uses reasoning title for the working indicator and keeps title-only reasoning rows visible", () => {
     const items: ConversationItem[] = [
       {

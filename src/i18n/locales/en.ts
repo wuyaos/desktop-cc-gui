@@ -157,6 +157,7 @@ const en = {
     showGitSidebar: "Show right sidebar",
     quickNewThread: "New Thread",
     quickAutomation: "Panel",
+    quickSearch: "Search",
     quickSkills: "Skills",
     threadsSection: "Threads",
   },
@@ -361,6 +362,7 @@ const en = {
 
     // Common actions
     closeSettings: "Close settings",
+    backToApp: "Back to app",
     saving: "Saving...",
     reset: "Reset",
     clear: "Clear",
@@ -429,6 +431,12 @@ const en = {
     // Composer section
     composerTitle: "Composer",
     composerDescription: "Control helpers and formatting behavior inside the message editor.",
+    sendShortcutSubtitle: "Send shortcut",
+    sendShortcutSubDescription: "Choose how to send messages and insert new lines in the composer.",
+    sendShortcutEnterTitle: "Enter sends",
+    sendShortcutEnterDesc: "Press Enter to send, Shift+Enter for a new line.",
+    sendShortcutCmdEnterTitle: "⌘/Ctrl+Enter sends",
+    sendShortcutCmdEnterDesc: "Press ⌘/Ctrl+Enter to send, Enter for a new line.",
     presetsSubtitle: "Presets",
     presetsSubDescription: "Choose a starting point and fine-tune the toggles below.",
     preset: "Preset",
@@ -796,6 +804,7 @@ const en = {
     anchorNavigation: "Message anchors",
     anchorJumpToUser: "Go to user message {{index}}",
     anchorUserTitle: "User #{{index}}",
+    showEarlierMessages: "Show {{count}} earlier messages",
   },
 
   // Composer
@@ -1538,7 +1547,7 @@ const en = {
   // About
   about: {
     version: "Version",
-    tagline: "Next-gen VibeCoding, why bother with an IDE",
+    tagline: "Next-generation VibeCoding editor",
     checkForUpdates: "Check for Updates",
     releaseNotes: "Release Notes",
     reportIssue: "Report Issue",
@@ -2820,7 +2829,7 @@ const en = {
     elementsTitle: "Element Guide",
     elementsDesc: "Use this page to quickly review each core module and its responsibility.",
     unlockTitle: "Unlock Panel",
-    unlockDesc: "Password file is ~/.codemoss/client/pwd.txt with default value 123456. If missing, unlock is allowed and the default file is auto-created.",
+    unlockDesc: "Password file is ~/.codemoss/client/pwd.txt. If missing, unlock is allowed and the file is auto-created with a default value.",
     passwordInput: "Enter unlock password",
     passwordPlaceholder: "Type password",
     passwordHint: "Press Enter or click Unlock after entering password.",
@@ -2959,8 +2968,10 @@ const en = {
     sendMessage: "Send message to {{provider}}",
     inputPlaceholder: "@reference files, #invoke agents, !insert prompts, Enter to send",
     inputPlaceholderEnter: "@reference files, #invoke agents, !insert prompts, Enter to send",
-    inputPlaceholderCmdEnter: "@reference files, #invoke agents, !insert prompts, \u2318Enter to send",
+    inputPlaceholderCmdEnter:
+      "@reference files, #invoke agents, !insert prompts, \u2318/Ctrl+Enter to send",
     sendMessageEnter: "Send message (Enter)",
+    sendMessageCmdEnter: "Send message (\u2318/Ctrl+Enter)",
     currentMode: "Current mode: {{mode}}",
     currentModel: "Current model: {{model}}",
     removeAttachment: "Remove attachment",
@@ -2992,6 +3003,7 @@ const en = {
     retrying: "Retrying ({{count}}/{{max}})...",
     removeAgent: "Remove agent",
     removeFileContext: "Remove file context",
+    removeContextSelection: "Remove selected item",
     removeFromQueue: "Remove from queue",
     commands: {
       clear: "Clear current session",

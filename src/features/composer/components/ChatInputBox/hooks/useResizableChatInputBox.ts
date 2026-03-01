@@ -5,6 +5,7 @@ type ResizeDirection = 'n';
 
 interface SizeState {
   wrapperHeightPx: number | null;
+  isCollapsed: boolean;
 }
 
 interface Bounds {
@@ -20,6 +21,10 @@ const MAX_WRAPPER_HEIGHT_VIEWPORT_RATIO = 0.55;
 const MAX_WRAPPER_HEIGHT_CAP_PX = 520;
 const MIN_MAX_WRAPPER_HEIGHT_PX = 140;
 const DEFAULT_MIN_WRAPPER_HEIGHT_PX = 112;
+const COLLAPSE_OVERSHOOT_PX = 36;
+const EXPAND_DRAG_THRESHOLD_PX = 18;
+const COLLAPSE_EXPAND_HOLD_MS = 400;
+const EXPAND_RESIZE_HOLD_MS = 1000;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -41,7 +46,7 @@ function getBounds(): Bounds {
 }
 
 function sanitizeLoadedSize(raw: unknown): SizeState {
-  if (!raw || typeof raw !== 'object') return { wrapperHeightPx: null };
+  if (!raw || typeof raw !== 'object') return { wrapperHeightPx: null, isCollapsed: false };
   const obj = raw as Record<string, unknown>;
 
   let wrapperHeightPx =
@@ -52,7 +57,9 @@ function sanitizeLoadedSize(raw: unknown): SizeState {
     wrapperHeightPx = null;
   }
 
-  return { wrapperHeightPx };
+  const isCollapsed = obj.isCollapsed === true;
+
+  return { wrapperHeightPx, isCollapsed };
 }
 
 export function computeResize(
@@ -84,6 +91,7 @@ export function useResizableChatInputBox({
   editableWrapperRef,
 }: UseResizableChatInputBoxOptions): {
   isResizing: boolean;
+  isCollapsed: boolean;
   containerStyle: CSSProperties;
   editableWrapperStyle: CSSProperties;
   getHandleProps: (dir: ResizeDirection) => ComponentPropsWithoutRef<'div'>;
@@ -92,10 +100,10 @@ export function useResizableChatInputBox({
   const [size, setSize] = useState<SizeState>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { wrapperHeightPx: null };
+      if (!raw) return { wrapperHeightPx: null, isCollapsed: false };
       return sanitizeLoadedSize(JSON.parse(raw));
     } catch {
-      return { wrapperHeightPx: null };
+      return { wrapperHeightPx: null, isCollapsed: false };
     }
   });
   const sizeRef = useRef<SizeState>(size);
@@ -108,7 +116,111 @@ export function useResizableChatInputBox({
     bounds: Bounds;
     prevUserSelect: string;
     prevCursor: string;
+    startCollapsed: boolean;
+    expandResizeUnlocked: boolean;
   } | null>(null);
+  const transitionTimerRef = useRef<number | null>(null);
+  const pendingTransitionRef = useRef<'collapse' | 'expand' | null>(null);
+  const expandResizeTimerRef = useRef<number | null>(null);
+  const pendingExpandResizeRef = useRef(false);
+  const latestPointerYRef = useRef<number | null>(null);
+
+  const clearPendingTransition = useCallback(() => {
+    if (transitionTimerRef.current != null) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    pendingTransitionRef.current = null;
+  }, []);
+
+  const clearPendingExpandResizeUnlock = useCallback(() => {
+    if (expandResizeTimerRef.current != null) {
+      window.clearTimeout(expandResizeTimerRef.current);
+      expandResizeTimerRef.current = null;
+    }
+    pendingExpandResizeRef.current = false;
+  }, []);
+
+  const scheduleExpandResizeUnlock = useCallback(() => {
+    if (pendingExpandResizeRef.current) return;
+
+    pendingExpandResizeRef.current = true;
+    expandResizeTimerRef.current = window.setTimeout(() => {
+      expandResizeTimerRef.current = null;
+      pendingExpandResizeRef.current = false;
+
+      const start = startRef.current;
+      if (!start) return;
+
+      start.expandResizeUnlocked = true;
+
+      const pointerY = latestPointerYRef.current ?? start.startY;
+      const { wrapperHeightPx } = computeResize(
+        {
+          startY: start.startY,
+          startWrapperHeightPx: start.startWrapperHeightPx,
+        },
+        { y: pointerY },
+        start.bounds
+      );
+
+      setSize({
+        wrapperHeightPx,
+        isCollapsed: false,
+      });
+    }, EXPAND_RESIZE_HOLD_MS);
+  }, []);
+
+  const applyTransition = useCallback((intent: 'collapse' | 'expand') => {
+    const start = startRef.current;
+    const pointerY = start ? latestPointerYRef.current ?? start.startY : null;
+
+    if (intent === 'collapse') {
+      if (start && pointerY != null) {
+        start.startCollapsed = true;
+        start.startY = pointerY;
+        start.startWrapperHeightPx = start.bounds.minWrapperHeightPx;
+        start.expandResizeUnlocked = true;
+      }
+      clearPendingExpandResizeUnlock();
+      setSize((prev) => (prev.isCollapsed ? prev : { ...prev, isCollapsed: true }));
+      return;
+    }
+
+    if (!start || pointerY == null) return;
+
+    start.startCollapsed = false;
+    start.startY = pointerY;
+    start.startWrapperHeightPx = start.bounds.minWrapperHeightPx;
+    start.expandResizeUnlocked = false;
+    clearPendingExpandResizeUnlock();
+
+    setSize({
+      wrapperHeightPx: start.bounds.minWrapperHeightPx,
+      isCollapsed: false,
+    });
+  }, [clearPendingExpandResizeUnlock]);
+
+  const scheduleTransition = useCallback(
+    (next: 'collapse' | 'expand' | null) => {
+      if (pendingTransitionRef.current === next) return;
+
+      if (transitionTimerRef.current != null) {
+        window.clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
+      }
+
+      pendingTransitionRef.current = next;
+      if (!next) return;
+
+      transitionTimerRef.current = window.setTimeout(() => {
+        transitionTimerRef.current = null;
+        if (pendingTransitionRef.current !== next) return;
+        applyTransition(next);
+      }, COLLAPSE_EXPAND_HOLD_MS);
+    },
+    [applyTransition]
+  );
 
   // Persist size changes (best-effort).
   useEffect(() => {
@@ -129,7 +241,7 @@ export function useResizableChatInputBox({
             ? null
             : clamp(prev.wrapperHeightPx, bounds.minWrapperHeightPx, bounds.maxWrapperHeightPx);
         if (nextWrapperHeightPx === prev.wrapperHeightPx) return prev;
-        return { wrapperHeightPx: nextWrapperHeightPx };
+        return { ...prev, wrapperHeightPx: nextWrapperHeightPx };
       });
     };
 
@@ -142,20 +254,43 @@ export function useResizableChatInputBox({
 
   const nudge = useCallback(
     (delta: { wrapperHeightPx?: number }) => {
-      const wrapperEl = editableWrapperRef.current;
-      if (!wrapperEl) return;
-
       const bounds = getBounds();
-      const wrapperRect = wrapperEl.getBoundingClientRect();
+      const wrapperEl = editableWrapperRef.current;
+      const wrapperRectHeight = wrapperEl?.getBoundingClientRect().height ?? bounds.minWrapperHeightPx;
+      const currentHeight = sizeRef.current.wrapperHeightPx ?? wrapperRectHeight;
 
-      const currentHeight = sizeRef.current.wrapperHeightPx ?? wrapperRect.height;
+      if (sizeRef.current.isCollapsed) {
+        if ((delta.wrapperHeightPx ?? 0) <= 0) return;
+        const baseHeight = clamp(currentHeight, bounds.minWrapperHeightPx, bounds.maxWrapperHeightPx);
+        const nextHeight = clamp(
+          Math.round(baseHeight + (delta.wrapperHeightPx ?? 0)),
+          bounds.minWrapperHeightPx,
+          bounds.maxWrapperHeightPx
+        );
+        setSize({
+          wrapperHeightPx: nextHeight,
+          isCollapsed: false,
+        });
+        return;
+      }
 
       const nextHeight =
         delta.wrapperHeightPx == null
           ? currentHeight
           : clamp(Math.round(currentHeight + delta.wrapperHeightPx), bounds.minWrapperHeightPx, bounds.maxWrapperHeightPx);
 
+      if (
+        delta.wrapperHeightPx != null &&
+        delta.wrapperHeightPx < 0 &&
+        currentHeight <= bounds.minWrapperHeightPx
+      ) {
+        setSize((prev) => ({ ...prev, isCollapsed: true }));
+        return;
+      }
+
       setSize((prev) => ({
+        ...prev,
+        isCollapsed: false,
         wrapperHeightPx: delta.wrapperHeightPx == null ? prev.wrapperHeightPx : nextHeight,
       }));
     },
@@ -169,15 +304,58 @@ export function useResizableChatInputBox({
     document.body.style.userSelect = start.prevUserSelect;
     document.body.style.cursor = start.prevCursor;
 
+    clearPendingTransition();
+    clearPendingExpandResizeUnlock();
+    latestPointerYRef.current = null;
     startRef.current = null;
     setIsResizing(false);
-  }, []);
+  }, [clearPendingExpandResizeUnlock, clearPendingTransition]);
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const start = startRef.current;
       if (!start) return;
       e.preventDefault();
+      const dy = e.clientY - start.startY;
+      latestPointerYRef.current = e.clientY;
+
+      if (start.startCollapsed) {
+        const shouldExpand = dy <= -EXPAND_DRAG_THRESHOLD_PX;
+        if (!shouldExpand) {
+          scheduleTransition(null);
+          setSize((prev) => (prev.isCollapsed ? prev : { ...prev, isCollapsed: true }));
+          return;
+        }
+        scheduleTransition('expand');
+        return;
+      }
+
+      if (!start.expandResizeUnlocked) {
+        const shouldUnlockResize = dy <= -EXPAND_DRAG_THRESHOLD_PX;
+        if (shouldUnlockResize) {
+          scheduleExpandResizeUnlock();
+        } else {
+          clearPendingExpandResizeUnlock();
+        }
+
+        setSize({
+          wrapperHeightPx: start.bounds.minWrapperHeightPx,
+          isCollapsed: false,
+        });
+        return;
+      }
+
+      const rawHeight = start.startWrapperHeightPx - dy;
+      const shouldCollapse = rawHeight <= start.bounds.minWrapperHeightPx - COLLAPSE_OVERSHOOT_PX;
+
+      if (shouldCollapse) {
+        clearPendingExpandResizeUnlock();
+        scheduleTransition('collapse');
+        return;
+      }
+
+      scheduleTransition(null);
+      clearPendingExpandResizeUnlock();
       const { wrapperHeightPx } = computeResize(
         {
           startY: start.startY,
@@ -187,7 +365,10 @@ export function useResizableChatInputBox({
         start.bounds
       );
 
-      setSize({ wrapperHeightPx });
+      setSize({
+        wrapperHeightPx,
+        isCollapsed: false,
+      });
     };
 
     const onUp = () => stopResize();
@@ -201,7 +382,14 @@ export function useResizableChatInputBox({
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
     };
-  }, [stopResize]);
+  }, [clearPendingExpandResizeUnlock, scheduleExpandResizeUnlock, scheduleTransition, stopResize]);
+
+  useEffect(() => {
+    return () => {
+      clearPendingTransition();
+      clearPendingExpandResizeUnlock();
+    };
+  }, [clearPendingExpandResizeUnlock, clearPendingTransition]);
 
   const getHandleProps = useCallback(
     (_dir: ResizeDirection) => {
@@ -210,19 +398,22 @@ export function useResizableChatInputBox({
           e.preventDefault();
           e.stopPropagation();
 
-          const wrapperEl = editableWrapperRef.current;
-          if (!wrapperEl) return;
-
           const bounds = getBounds();
-          const wrapperRect = wrapperEl.getBoundingClientRect();
+          const wrapperEl = editableWrapperRef.current;
+          const wrapperRect = wrapperEl?.getBoundingClientRect();
 
-          const startWrapperHeightPx = sizeRef.current.wrapperHeightPx ?? wrapperRect.height;
+          const startWrapperHeightPx =
+            sizeRef.current.wrapperHeightPx ??
+            (wrapperRect?.height ? Math.round(wrapperRect.height) : bounds.minWrapperHeightPx);
 
           const prevUserSelect = document.body.style.userSelect;
           const prevCursor = document.body.style.cursor;
 
           document.body.style.userSelect = 'none';
           document.body.style.cursor = 'ns-resize';
+          clearPendingTransition();
+          clearPendingExpandResizeUnlock();
+          latestPointerYRef.current = e.clientY;
 
           startRef.current = {
             startY: e.clientY,
@@ -230,13 +421,15 @@ export function useResizableChatInputBox({
             bounds,
             prevUserSelect,
             prevCursor,
+            startCollapsed: sizeRef.current.isCollapsed,
+            expandResizeUnlocked: !sizeRef.current.isCollapsed,
           };
 
           setIsResizing(true);
         },
       } satisfies ComponentPropsWithoutRef<'div'>;
     },
-    [editableWrapperRef]
+    [clearPendingExpandResizeUnlock, clearPendingTransition, editableWrapperRef]
   );
 
   // containerStyle is now empty - width is always auto (100% of parent)
@@ -246,13 +439,14 @@ export function useResizableChatInputBox({
 
   const editableWrapperStyle = useMemo((): CSSProperties => {
     return {
-      height: size.wrapperHeightPx == null ? undefined : `${size.wrapperHeightPx}px`,
-      maxHeight: size.wrapperHeightPx == null ? undefined : `${size.wrapperHeightPx}px`,
+      height: size.isCollapsed || size.wrapperHeightPx == null ? undefined : `${size.wrapperHeightPx}px`,
+      maxHeight: size.isCollapsed || size.wrapperHeightPx == null ? undefined : `${size.wrapperHeightPx}px`,
     };
-  }, [size.wrapperHeightPx]);
+  }, [size.isCollapsed, size.wrapperHeightPx]);
 
   return {
     isResizing,
+    isCollapsed: size.isCollapsed,
     containerStyle,
     editableWrapperStyle,
     getHandleProps,

@@ -24,7 +24,6 @@ import { useThreadRows } from "../hooks/useThreadRows";
 import { formatRelativeTimeShort } from "../../../utils/time";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { pushErrorToast } from "../../../services/toasts";
-import workspaceSectionIconUrl from "../../../../icon.png";
 import Brain from "lucide-react/dist/esm/icons/brain";
 import BrainCircuit from "lucide-react/dist/esm/icons/brain-circuit";
 import BriefcaseBusiness from "lucide-react/dist/esm/icons/briefcase-business";
@@ -32,13 +31,12 @@ import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import ChevronsDownUp from "lucide-react/dist/esm/icons/chevrons-down-up";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
-import Home from "lucide-react/dist/esm/icons/home";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import MessageSquareMore from "lucide-react/dist/esm/icons/message-square-more";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Search from "lucide-react/dist/esm/icons/search";
 import Settings from "lucide-react/dist/esm/icons/settings";
-import SquareTerminal from "lucide-react/dist/esm/icons/square-terminal";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 
 const UNGROUPED_COLLAPSE_ID = "__ungrouped__";
@@ -47,6 +45,11 @@ type WorkspaceGroupSection = {
   id: string | null;
   name: string;
   workspaces: WorkspaceInfo[];
+};
+
+type WorkspaceThreadRows = {
+  unpinnedRows: Array<{ thread: ThreadSummary; depth: number }>;
+  totalRoots: number;
 };
 
 type SidebarProps = {
@@ -113,6 +116,7 @@ type SidebarProps = {
   onOpenProjectMemory: () => void;
   onOpenSpecHub: () => void;
   onOpenWorkspaceHome: () => void;
+  onOpenGlobalSearch: () => void;
   topbarNode?: ReactNode;
 };
 
@@ -135,9 +139,9 @@ export function Sidebar({
   accountSwitching: _accountSwitching,
   onOpenSettings,
   onOpenDebug: _onOpenDebug,
-  showTerminalButton,
-  isTerminalOpen,
-  onToggleTerminal,
+  showTerminalButton: _showTerminalButton,
+  isTerminalOpen: _isTerminalOpen,
+  onToggleTerminal: _onToggleTerminal,
   onAddWorkspace,
   onSelectHome: _onSelectHome,
   onSelectWorkspace,
@@ -173,12 +177,11 @@ export function Sidebar({
   onOpenMemory,
   onOpenProjectMemory,
   onOpenSpecHub,
-  onOpenWorkspaceHome,
+  onOpenWorkspaceHome: _onOpenWorkspaceHome,
+  onOpenGlobalSearch,
   topbarNode,
 }: SidebarProps) {
   const { t } = useTranslation();
-
-
 
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
@@ -303,6 +306,9 @@ export function Sidebar({
   );
 
   const pinnedThreadRows = useMemo(() => {
+    if (pinnedThreadsVersion === 0) {
+      return [];
+    }
     type ThreadRow = { thread: ThreadSummary; depth: number };
     const groups: Array<{
       pinTime: number;
@@ -396,6 +402,42 @@ export function Sidebar({
     () => filteredGroupedWorkspaces.some((g) => g.id !== null),
     [filteredGroupedWorkspaces],
   );
+
+  const threadRowsByWorkspace = useMemo(() => {
+    const rowsByWorkspace = new Map<string, WorkspaceThreadRows>();
+    const hasNamedGroups = filteredGroupedWorkspaces.some((g) => g.id !== null);
+    filteredGroupedWorkspaces.forEach((group) => {
+      const showGroupHeader = Boolean(group.id) || hasNamedGroups;
+      const toggleId = group.id ?? (showGroupHeader ? UNGROUPED_COLLAPSE_ID : null);
+      const isGroupCollapsed = Boolean(toggleId && collapsedGroups.has(toggleId));
+      if (isGroupCollapsed) {
+        return;
+      }
+      group.workspaces.forEach((workspace) => {
+        if (workspace.settings.sidebarCollapsed) {
+          rowsByWorkspace.set(workspace.id, { unpinnedRows: [], totalRoots: 0 });
+          return;
+        }
+        const threads = threadsByWorkspace[workspace.id] ?? [];
+        const isExpanded = expandedWorkspaces.has(workspace.id);
+        const { unpinnedRows, totalRoots } = getThreadRows(
+          threads,
+          isExpanded,
+          workspace.id,
+          getPinTimestamp,
+        );
+        rowsByWorkspace.set(workspace.id, { unpinnedRows, totalRoots });
+      });
+    });
+    return rowsByWorkspace;
+  }, [
+    collapsedGroups,
+    expandedWorkspaces,
+    filteredGroupedWorkspaces,
+    getPinTimestamp,
+    getThreadRows,
+    threadsByWorkspace,
+  ]);
 
   const worktreesByParent = useMemo(() => {
     const worktrees = new Map<string, WorkspaceInfo[]>();
@@ -553,10 +595,6 @@ export function Sidebar({
     return () => window.clearTimeout(handle);
   }, [searchQuery]);
 
-  const handleOpenWorkspaceOverview = useCallback(() => {
-    onOpenWorkspaceHome();
-  }, [onOpenWorkspaceHome]);
-
   const handleOpenSkillsComingSoon = useCallback(() => {
     pushErrorToast({
       title: t("sidebar.comingSoon"),
@@ -631,7 +669,7 @@ export function Sidebar({
           <nav className="sidebar-primary-nav" aria-label={t("tabbar.primaryNavigation")}>
             <button
               type="button"
-              className={`sidebar-primary-nav-item ${appMode === "chat" ? "is-active" : ""}`}
+              className={`sidebar-primary-nav-item sidebar-primary-nav-mode-item ${appMode === "chat" ? "is-active" : ""}`}
               onClick={() => onAppModeChange("chat")}
               title={t("sidebar.quickNewThread")}
               aria-label={t("sidebar.quickNewThread")}
@@ -642,7 +680,7 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className={`sidebar-primary-nav-item ${appMode === "kanban" ? "is-active" : ""}`}
+              className={`sidebar-primary-nav-item sidebar-primary-nav-mode-item ${appMode === "kanban" ? "is-active" : ""}`}
               onClick={() => onAppModeChange("kanban")}
               title={t("sidebar.quickAutomation")}
               aria-label={t("sidebar.quickAutomation")}
@@ -653,80 +691,16 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className="sidebar-primary-nav-item"
-              onClick={handleOpenSkillsComingSoon}
-              title={t("sidebar.quickSkills")}
-              aria-label={t("sidebar.quickSkills")}
+              className="sidebar-primary-nav-item sidebar-primary-nav-subitem"
+              onClick={onOpenGlobalSearch}
+              title={t("sidebar.quickSearch")}
+              aria-label={t("sidebar.quickSearch")}
               data-tauri-drag-region="false"
             >
-              <BriefcaseBusiness className="sidebar-primary-nav-icon" aria-hidden />
-              <span className="sidebar-primary-nav-text">{t("sidebar.quickSkills")}</span>
+              <Search className="sidebar-primary-nav-icon" aria-hidden />
+              <span className="sidebar-primary-nav-text">{t("sidebar.quickSearch")}</span>
             </button>
           </nav>
-          <div className="sidebar-quick-icon-strip" role="group" aria-label={t("sidebar.pluginMarket")}>
-            <button
-              type="button"
-              className="sidebar-quick-icon-button"
-              onClick={onOpenMemory}
-              title={t("sidebar.longTermMemory")}
-              aria-label={t("sidebar.longTermMemory")}
-              data-tauri-drag-region="false"
-            >
-              <BrainCircuit size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="sidebar-quick-icon-button"
-              onClick={onOpenSpecHub}
-              title={t("sidebar.specHub")}
-              aria-label={t("sidebar.specHub")}
-              data-tauri-drag-region="false"
-            >
-              <LayoutDashboard size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="sidebar-quick-icon-button"
-              onClick={onOpenProjectMemory}
-              title={t("panels.memory")}
-              aria-label={t("panels.memory")}
-              data-tauri-drag-region="false"
-            >
-              <Brain size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className={`sidebar-quick-icon-button${appMode === "gitHistory" ? " is-active" : ""}`}
-              onClick={() => onAppModeChange(appMode === "gitHistory" ? "chat" : "gitHistory")}
-              title={t("git.logMode")}
-              aria-label={t("git.logMode")}
-              data-tauri-drag-region="false"
-            >
-              <GitBranch size={14} aria-hidden />
-            </button>
-            {showTerminalButton && onToggleTerminal ? (
-              <button
-                type="button"
-                className={`sidebar-quick-icon-button${isTerminalOpen ? " is-active" : ""}`}
-                onClick={onToggleTerminal}
-                title={t("common.terminal")}
-                aria-label={t("common.toggleTerminalPanel")}
-                data-tauri-drag-region="false"
-              >
-                <SquareTerminal size={14} aria-hidden />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="sidebar-quick-icon-button"
-              onClick={handleOpenWorkspaceOverview}
-              title={t("sidebar.openHome")}
-              aria-label={t("sidebar.openHome")}
-              data-tauri-drag-region="false"
-            >
-              <Home size={14} aria-hidden />
-            </button>
-          </div>
           <ScrollArea
             className={`sidebar-content-column${scrollFade.top ? " fade-top" : ""}${
               scrollFade.bottom ? " fade-bottom" : ""
@@ -734,14 +708,23 @@ export function Sidebar({
             onViewportScroll={updateScrollFade}
             viewportRef={sidebarBodyRef}
           >
+            {pinnedThreadRows.length > 0 && (
+              <div className="pinned-section sidebar-pinned-section">
+                <PinnedThreadList
+                  rows={pinnedThreadRows}
+                  activeWorkspaceId={activeWorkspaceId}
+                  activeThreadId={activeThreadId}
+                  threadStatusById={threadStatusById}
+                  getThreadTime={getThreadTime}
+                  isThreadPinned={isThreadPinned}
+                  isThreadAutoNaming={isThreadAutoNaming}
+                  onSelectThread={onSelectThread}
+                  onShowThreadMenu={showThreadMenu}
+                />
+              </div>
+            )}
             <div className="sidebar-section-header">
               <div className="sidebar-section-title">
-                <img
-                  src={workspaceSectionIconUrl}
-                  className="sidebar-section-title-icon sidebar-section-title-icon-image"
-                  alt=""
-                  aria-hidden
-                />
                 {t("sidebar.projects")}
               </div>
               <button
@@ -778,24 +761,6 @@ export function Sidebar({
               </button>
             </div>
             <div className="workspace-list">
-          {pinnedThreadRows.length > 0 && (
-            <div className="pinned-section">
-              <div className="workspace-group-header">
-                <div className="workspace-group-label">{t("sidebar.pinned")}</div>
-              </div>
-              <PinnedThreadList
-                rows={pinnedThreadRows}
-                activeWorkspaceId={activeWorkspaceId}
-                activeThreadId={activeThreadId}
-                threadStatusById={threadStatusById}
-                getThreadTime={getThreadTime}
-                isThreadPinned={isThreadPinned}
-                isThreadAutoNaming={isThreadAutoNaming}
-                onSelectThread={onSelectThread}
-                onShowThreadMenu={showThreadMenu}
-              />
-            </div>
-          )}
           {filteredGroupedWorkspaces.map((group) => {
             const groupId = group.id;
             const showGroupHeader = Boolean(groupId) || hasNamedGroupsInView;
@@ -803,6 +768,7 @@ export function Sidebar({
             const isGroupCollapsed = Boolean(
               toggleId && collapsedGroups.has(toggleId),
             );
+            const visibleWorkspaces = isGroupCollapsed ? [] : group.workspaces;
 
             return (
               <WorkspaceGroup
@@ -813,19 +779,13 @@ export function Sidebar({
                 isCollapsed={isGroupCollapsed}
                 onToggleCollapse={toggleGroupCollapse}
               >
-                {group.workspaces.map((entry) => {
+                {visibleWorkspaces.map((entry) => {
                   const threads = threadsByWorkspace[entry.id] ?? [];
                   const isCollapsed = entry.settings.sidebarCollapsed;
                   const isExpanded = expandedWorkspaces.has(entry.id);
-                  const {
-                    unpinnedRows,
-                    totalRoots: totalThreadRoots,
-                  } = getThreadRows(
-                    threads,
-                    isExpanded,
-                    entry.id,
-                    getPinTimestamp,
-                  );
+                  const threadRows = threadRowsByWorkspace.get(entry.id);
+                  const unpinnedRows = threadRows?.unpinnedRows ?? [];
+                  const totalThreadRoots = threadRows?.totalRoots ?? 0;
                   const nextCursor =
                     threadListCursorByWorkspace[entry.id] ?? null;
                   const showThreadList =
@@ -932,31 +892,8 @@ export function Sidebar({
                   <button
                     type="button"
                     role="menuitem"
-                    className={`sidebar-settings-dropdown-item${appMode === "chat" ? " is-active" : ""}`}
-                    onClick={() => {
-                      setIsSettingsMenuOpen(false);
-                      onAppModeChange("chat");
-                    }}
-                  >
-                    <MessageSquareMore size={14} aria-hidden />
-                    <span>{t("sidebar.quickNewThread")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`sidebar-settings-dropdown-item${appMode === "kanban" ? " is-active" : ""}`}
-                    onClick={() => {
-                      setIsSettingsMenuOpen(false);
-                      onAppModeChange("kanban");
-                    }}
-                  >
-                    <LayoutGrid size={14} aria-hidden />
-                    <span>{t("sidebar.quickAutomation")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
                     className="sidebar-settings-dropdown-item"
+                    disabled
                     onClick={() => {
                       setIsSettingsMenuOpen(false);
                       handleOpenSkillsComingSoon();
@@ -1004,32 +941,6 @@ export function Sidebar({
                   <button
                     type="button"
                     role="menuitem"
-                    className="sidebar-settings-dropdown-item"
-                    onClick={() => {
-                      setIsSettingsMenuOpen(false);
-                      onOpenSettings();
-                    }}
-                  >
-                    <Settings size={14} aria-hidden />
-                    <span>{t("settings.title")}</span>
-                  </button>
-                  {showTerminalButton && onToggleTerminal ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={`sidebar-settings-dropdown-item${isTerminalOpen ? " is-active" : ""}`}
-                      onClick={() => {
-                        setIsSettingsMenuOpen(false);
-                        onToggleTerminal();
-                      }}
-                    >
-                      <span className="codicon codicon-terminal" style={{ fontSize: "14px" }} aria-hidden />
-                      <span>{t("common.terminal")}</span>
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    role="menuitem"
                     className={`sidebar-settings-dropdown-item${appMode === "gitHistory" ? " is-active" : ""}`}
                     onClick={() => {
                       setIsSettingsMenuOpen(false);
@@ -1045,11 +956,11 @@ export function Sidebar({
                     className="sidebar-settings-dropdown-item"
                     onClick={() => {
                       setIsSettingsMenuOpen(false);
-                      handleOpenWorkspaceOverview();
+                      onOpenSettings();
                     }}
                   >
-                    <Home size={14} aria-hidden />
-                    <span>{t("sidebar.openHome")}</span>
+                    <Settings size={14} aria-hidden />
+                    <span>{t("settings.title")}</span>
                   </button>
                 </div>
               )}

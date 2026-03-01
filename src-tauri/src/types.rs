@@ -680,6 +680,11 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) composer_editor_preset: String,
     #[serde(
+        default = "default_composer_send_shortcut",
+        rename = "composerSendShortcut"
+    )]
+    pub(crate) composer_send_shortcut: String,
+    #[serde(
         default = "default_composer_fence_expand_on_space",
         rename = "composerFenceExpandOnSpace"
     )]
@@ -768,11 +773,12 @@ fn default_show_message_anchors() -> bool {
 }
 
 fn default_ui_font_family() -> String {
-    "\"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif".to_string()
+    "Monaco, \"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif"
+        .to_string()
 }
 
 fn default_code_font_family() -> String {
-    "\"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace".to_string()
+    "Monaco, \"SF Mono\", \"SFMono-Regular\", Menlo, monospace".to_string()
 }
 
 fn default_code_font_size() -> u8 {
@@ -914,6 +920,10 @@ fn default_dictation_hold_key() -> String {
 
 fn default_composer_editor_preset() -> String {
     "default".to_string()
+}
+
+fn default_composer_send_shortcut() -> String {
+    "enter".to_string()
 }
 
 fn default_composer_fence_expand_on_space() -> bool {
@@ -1063,6 +1073,7 @@ impl Default for AppSettings {
             dictation_preferred_language: None,
             dictation_hold_key: default_dictation_hold_key(),
             composer_editor_preset: default_composer_editor_preset(),
+            composer_send_shortcut: default_composer_send_shortcut(),
             composer_fence_expand_on_space: default_composer_fence_expand_on_space(),
             composer_fence_expand_on_enter: default_composer_fence_expand_on_enter(),
             composer_fence_language_tags: default_composer_fence_language_tags(),
@@ -1210,8 +1221,8 @@ mod tests {
         assert_eq!(settings.theme, "system");
         assert!(!settings.usage_show_remaining);
         assert!(settings.show_message_anchors);
-        assert!(settings.ui_font_family.contains("SF Pro Text"));
-        assert!(settings.code_font_family.contains("SF Mono"));
+        assert!(settings.ui_font_family.starts_with("Monaco"));
+        assert!(settings.code_font_family.starts_with("Monaco"));
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
         assert!(settings.system_notification_enabled);
@@ -1226,6 +1237,7 @@ mod tests {
         assert!(settings.dictation_preferred_language.is_none());
         assert_eq!(settings.dictation_hold_key, "alt");
         assert_eq!(settings.composer_editor_preset, "default");
+        assert_eq!(settings.composer_send_shortcut, "enter");
         assert!(!settings.composer_fence_expand_on_space);
         assert!(!settings.composer_fence_expand_on_enter);
         assert!(!settings.composer_fence_language_tags);

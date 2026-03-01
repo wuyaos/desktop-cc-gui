@@ -157,4 +157,15 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(mockState.switchClaudeProvider).not.toHaveBeenCalled();
     expect(mockState.setClaudeAlwaysThinkingEnabled).toHaveBeenCalledWith(false);
   });
+
+  it('forwards send shortcut to ChatInputBox', async () => {
+    renderAdapter({ sendShortcut: 'cmdEnter' });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      sendShortcut?: 'enter' | 'cmdEnter';
+    };
+    expect(latest.sendShortcut).toBe('cmdEnter');
+  });
 });

@@ -1,4 +1,5 @@
 import Layers from "lucide-react/dist/esm/icons/layers";
+import { useMemo } from "react";
 import type { MouseEvent } from "react";
 
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
@@ -85,6 +86,39 @@ export function WorktreeSection({
   onToggleExpanded,
   onLoadOlderThreads,
 }: WorktreeSectionProps) {
+  const threadRowsByWorktreeId = useMemo(() => {
+    const rowsByWorktreeId = new Map<
+      string,
+      { unpinnedRows: ThreadRowsResult["unpinnedRows"]; totalRoots: number }
+    >();
+    if (isSectionCollapsed || worktrees.length === 0) {
+      return rowsByWorktreeId;
+    }
+    worktrees.forEach((worktree) => {
+      if (worktree.settings.sidebarCollapsed) {
+        rowsByWorktreeId.set(worktree.id, { unpinnedRows: [], totalRoots: 0 });
+        return;
+      }
+      const isWorktreeExpanded = expandedWorkspaces.has(worktree.id);
+      const worktreeThreads = threadsByWorkspace[worktree.id] ?? [];
+      const { unpinnedRows, totalRoots } = getThreadRows(
+        worktreeThreads,
+        isWorktreeExpanded,
+        worktree.id,
+        getPinTimestamp,
+      );
+      rowsByWorktreeId.set(worktree.id, { unpinnedRows, totalRoots });
+    });
+    return rowsByWorktreeId;
+  }, [
+    expandedWorkspaces,
+    getPinTimestamp,
+    getThreadRows,
+    isSectionCollapsed,
+    threadsByWorkspace,
+    worktrees,
+  ]);
+
   if (!worktrees.length) {
     return null;
   }
@@ -127,15 +161,9 @@ export function WorktreeSection({
             const isWorktreeExpanded = expandedWorkspaces.has(worktree.id);
             const hasPrimaryActiveThread =
               worktree.id === activeWorkspaceId && Boolean(activeThreadId);
-            const {
-              unpinnedRows: worktreeThreadRows,
-              totalRoots: totalWorktreeRoots,
-            } = getThreadRows(
-              worktreeThreads,
-              isWorktreeExpanded,
-              worktree.id,
-              getPinTimestamp,
-            );
+            const threadRows = threadRowsByWorktreeId.get(worktree.id);
+            const worktreeThreadRows = threadRows?.unpinnedRows ?? [];
+            const totalWorktreeRoots = threadRows?.totalRoots ?? 0;
 
             return (
               <WorktreeCard

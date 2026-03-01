@@ -25,14 +25,16 @@ export function ResizeHandles({
   };
 
   return (
-    <div
-      className="resize-handle resize-handle--n"
-      {...getHandleProps('n')}
-      role="separator"
-      aria-orientation="horizontal"
-      aria-label="Resize input height"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-    />
+    <div className="resize-handle-hover-zone" aria-hidden>
+      <div
+        className="resize-handle resize-handle--n"
+        {...getHandleProps('n')}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize input height"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+      />
+    </div>
   );
 }

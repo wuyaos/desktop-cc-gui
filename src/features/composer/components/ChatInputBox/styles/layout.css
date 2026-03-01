@@ -24,6 +24,14 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.chat-input-box.is-collapsed {
+  min-height: 8px;
+  height: 8px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
 /* Show blue border on hover */
 .chat-input-box:hover {
   border-color: var(--input-focus-border);
@@ -38,6 +46,13 @@
   border-color: var(--input-focus-border);
 }
 
+.chat-input-box.is-collapsed:hover,
+.chat-input-box.is-collapsed:focus-within,
+.chat-input-box.is-collapsed.is-resizing {
+  border-color: transparent;
+  box-shadow: none;
+}
+
 /* ============================================================
    Resize handles (Augment-like)
    ============================================================ */
@@ -48,14 +63,24 @@
   user-select: none;
 }
 
+.resize-handle-hover-zone {
+  position: absolute;
+  z-index: 9;
+  top: -20px;
+  left: 0;
+  right: 0;
+  height: 14px;
+  cursor: default;
+}
+
 /* Top-center grip: vertical resize */
 .resize-handle--n {
-  top: -20px;
+  top: 0;
   left: 50%;
   width: 78px;
   height: 14px;
   transform: translateX(-50%);
-  cursor: ns-resize;
+  cursor: pointer;
 }
 
 .resize-handle--n::before {
@@ -69,13 +94,25 @@
   border-radius: 999px;
   background: var(--text-muted);
   opacity: 0;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.16s ease;
 }
 
 /* Only show when hovering over the resize handle itself or while dragging */
 .resize-handle--n:hover::before,
+.resize-handle-hover-zone:hover .resize-handle--n::before,
 .chat-input-box.is-resizing .resize-handle--n::before {
   opacity: 0.55;
+  background: var(--text-secondary);
+}
+
+.resize-handle--n:active::before,
+.resize-handle-hover-zone:active .resize-handle--n::before {
+  opacity: 0.8;
+  transform: translateX(-50%) scaleX(1.2) scaleY(1.08);
+}
+
+.chat-input-box.is-collapsed .resize-handle--n::before {
+  opacity: 0.7;
   background: var(--text-secondary);
 }
 
@@ -134,4 +171,3 @@
 .chat-input-box.is-resizing .resize-handle--ne::before {
   opacity: 0.55;
 }
-
