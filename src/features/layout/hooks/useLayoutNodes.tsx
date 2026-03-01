@@ -21,6 +21,10 @@ import { TabBar } from "../../app/components/TabBar";
 import { TabletNav } from "../../app/components/TabletNav";
 import { TerminalDock } from "../../terminal/components/TerminalDock";
 import { TerminalPanel } from "../../terminal/components/TerminalPanel";
+import type {
+  EditorNavigationLocation,
+  EditorNavigationTarget,
+} from "../../app/hooks/useGitPanelController";
 import type { ReviewPromptState, ReviewPromptStep } from "../../threads/hooks/useReviewPrompt";
 import type { WorkspaceLaunchScriptsState } from "../../app/hooks/useWorkspaceLaunchScripts";
 import type {
@@ -242,12 +246,13 @@ type LayoutNodesOptions = {
   editorSplitLayout: "vertical" | "horizontal";
   onToggleEditorSplitLayout: () => void;
   editorFilePath: string | null;
+  editorNavigationTarget: EditorNavigationTarget | null;
   openEditorTabs: string[];
   onActivateEditorTab: (path: string) => void;
   onCloseEditorTab: (path: string) => void;
   onCloseAllEditorTabs: () => void;
   onActiveEditorLineRangeChange: (range: { startLine: number; endLine: number } | null) => void;
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, location?: EditorNavigationLocation) => void;
   onExitEditor: () => void;
   onExitDiff: () => void;
   activeTab: "projects" | "codex" | "spec" | "git" | "log";
@@ -1158,6 +1163,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         workspaceId={options.activeWorkspace.id}
         workspacePath={options.activeWorkspace.path}
         filePath={options.editorFilePath}
+        navigationTarget={options.editorNavigationTarget}
         gitStatusFiles={options.gitStatus.files}
         openTabs={options.openEditorTabs}
         activeTabPath={options.editorFilePath}
@@ -1174,6 +1180,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         onSelectOpenAppId={options.onSelectOpenAppId}
         editorSplitLayout={options.editorSplitLayout}
         onToggleEditorSplitLayout={options.onToggleEditorSplitLayout}
+        onNavigateToLocation={options.onOpenFile}
         onClose={options.onExitEditor}
         onInsertText={options.onInsertComposerText}
       />

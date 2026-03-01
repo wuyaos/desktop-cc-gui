@@ -2448,6 +2448,101 @@ pub async fn opencode_lsp_document_symbols(
     }))
 }
 
+#[tauri::command]
+pub async fn opencode_lsp_definition(
+    workspace_id: String,
+    file_uri: String,
+    line: u32,
+    character: u32,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let workspace_path = {
+        let workspaces = state.workspaces.lock().await;
+        workspaces
+            .get(&workspace_id)
+            .map(|w| PathBuf::from(&w.path))
+            .ok_or_else(|| "Workspace not found".to_string())?
+    };
+    let manager = &state.engine_manager;
+    let config = manager.get_engine_config(EngineType::OpenCode).await;
+    let mut cmd = build_opencode_command(config.as_ref());
+    cmd.current_dir(workspace_path);
+    cmd.arg("debug");
+    cmd.arg("lsp");
+    cmd.arg("definition");
+    cmd.arg(&file_uri);
+    cmd.arg(line.to_string());
+    cmd.arg(character.to_string());
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute opencode debug lsp definition: {}", e))?;
+    let stdout = strip_ansi_codes(&String::from_utf8_lossy(&output.stdout));
+    let stderr = strip_ansi_codes(&String::from_utf8_lossy(&output.stderr));
+    if !output.status.success() {
+        return Err(format!(
+            "opencode debug lsp definition failed: {}",
+            stderr.trim()
+        ));
+    }
+    Ok(json!({
+        "fileUri": file_uri,
+        "line": line,
+        "character": character,
+        "result": parse_json_value(&stdout).unwrap_or_else(|| json!({ "raw": stdout.trim() })),
+    }))
+}
+
+#[tauri::command]
+pub async fn opencode_lsp_references(
+    workspace_id: String,
+    file_uri: String,
+    line: u32,
+    character: u32,
+    include_declaration: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let workspace_path = {
+        let workspaces = state.workspaces.lock().await;
+        workspaces
+            .get(&workspace_id)
+            .map(|w| PathBuf::from(&w.path))
+            .ok_or_else(|| "Workspace not found".to_string())?
+    };
+    let manager = &state.engine_manager;
+    let config = manager.get_engine_config(EngineType::OpenCode).await;
+    let mut cmd = build_opencode_command(config.as_ref());
+    cmd.current_dir(workspace_path);
+    cmd.arg("debug");
+    cmd.arg("lsp");
+    cmd.arg("references");
+    cmd.arg(&file_uri);
+    cmd.arg(line.to_string());
+    cmd.arg(character.to_string());
+    if include_declaration.unwrap_or(false) {
+        cmd.arg("--include-declaration");
+    }
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute opencode debug lsp references: {}", e))?;
+    let stdout = strip_ansi_codes(&String::from_utf8_lossy(&output.stdout));
+    let stderr = strip_ansi_codes(&String::from_utf8_lossy(&output.stderr));
+    if !output.status.success() {
+        return Err(format!(
+            "opencode debug lsp references failed: {}",
+            stderr.trim()
+        ));
+    }
+    Ok(json!({
+        "fileUri": file_uri,
+        "line": line,
+        "character": character,
+        "includeDeclaration": include_declaration.unwrap_or(false),
+        "result": parse_json_value(&stdout).unwrap_or_else(|| json!({ "raw": stdout.trim() })),
+    }))
+}
+
 /// Send a message using the active engine
 /// For Claude: spawns async tasks for streaming events to the frontend
 /// via app-server-event, returns immediately with turn ID.

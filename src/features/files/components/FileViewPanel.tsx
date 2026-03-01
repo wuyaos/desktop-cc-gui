@@ -13,6 +13,7 @@ import Eye from "lucide-react/dist/esm/icons/eye";
 import Code from "lucide-react/dist/esm/icons/code";
 import Rows2 from "lucide-react/dist/esm/icons/rows-2";
 import Save from "lucide-react/dist/esm/icons/save";
+import Search from "lucide-react/dist/esm/icons/search";
 import X from "lucide-react/dist/esm/icons/x";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import {
@@ -22,18 +23,11 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
-import { javascript } from "@codemirror/lang-javascript";
-import { json } from "@codemirror/lang-json";
-import { html } from "@codemirror/lang-html";
-import { css } from "@codemirror/lang-css";
-import { markdown as cmMarkdown } from "@codemirror/lang-markdown";
-import { python } from "@codemirror/lang-python";
-import { rust } from "@codemirror/lang-rust";
-import { xml } from "@codemirror/lang-xml";
-import { yaml } from "@codemirror/lang-yaml";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { RangeSetBuilder, type Extension } from "@codemirror/state";
 import {
+  getCodeIntelDefinition,
+  getCodeIntelReferences,
   getGitFileFullDiff,
   readWorkspaceFile,
   writeWorkspaceFile,
@@ -44,6 +38,11 @@ import { OpenAppMenu } from "../../app/components/OpenAppMenu";
 import FileIcon from "../../../components/FileIcon";
 import { pushErrorToast } from "../../../services/toasts";
 import type { GitFileStatus, OpenAppTarget } from "../../../types";
+import { codeMirrorExtensionsForPath } from "../utils/codemirrorLanguageExtensions";
+import {
+  lspPositionToEditorLocation,
+  offsetToLspPosition,
+} from "../utils/lspPosition";
 
 type FileViewPanelProps = {
   workspaceId: string;
@@ -66,11 +65,24 @@ type FileViewPanelProps = {
   onSelectOpenAppId: (id: string) => void;
   editorSplitLayout?: "vertical" | "horizontal";
   onToggleEditorSplitLayout?: () => void;
+  navigationTarget?: {
+    path: string;
+    line: number;
+    column: number;
+    requestId: number;
+  } | null;
+  onNavigateToLocation?: (
+    path: string,
+    location: { line: number; column: number },
+  ) => void;
   onClose: () => void;
   onInsertText?: (text: string) => void;
 };
 
 const markdownExtensions = new Set(["md", "mdx"]);
+const NAVIGATION_REQUEST_TIMEOUT_MS = 8_000;
+const CODE_INTEL_CACHE_TTL_MS = 3_000;
+const CODE_INTEL_REPEAT_DEBOUNCE_MS = 120;
 
 function isMarkdownPath(path: string) {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
@@ -124,42 +136,257 @@ function resolveAbsolutePath(workspacePath: string, relativePath: string) {
   return `${base}/${relativePath}`;
 }
 
-function cmLangExtension(filePath: string): Extension[] {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-  switch (ext) {
-    case "js":
-    case "mjs":
-      return [javascript()];
-    case "jsx":
-      return [javascript({ jsx: true })];
-    case "ts":
-      return [javascript({ typescript: true })];
-    case "tsx":
-      return [javascript({ jsx: true, typescript: true })];
-    case "json":
-      return [json()];
-    case "html":
-      return [html()];
-    case "css":
-    case "scss":
-    case "sass":
-      return [css()];
-    case "md":
-    case "mdx":
-      return [cmMarkdown()];
-    case "py":
-      return [python()];
-    case "rs":
-      return [rust()];
-    case "xml":
-    case "svg":
-      return [xml()];
-    case "yaml":
-    case "yml":
-      return [yaml()];
-    default:
-      return [];
+type LspLocationLike = {
+  uri: string;
+  path?: string | null;
+  line: number;
+  character: number;
+};
+
+type LocationCacheEntry = {
+  expiresAt: number;
+  value: LspLocationLike[];
+};
+
+type RecentTrigger = {
+  key: string;
+  at: number;
+};
+
+function makeLocationQueryKey(
+  filePath: string,
+  line: number,
+  character: number,
+  includeDeclaration?: boolean,
+) {
+  return `${filePath}:${line}:${character}:${includeDeclaration ? "1" : "0"}`;
+}
+
+function toFileUri(absolutePath: string) {
+  const normalizedPath = absolutePath.replace(/\\/g, "/");
+  const encodedPath = encodeURI(normalizedPath);
+  if (encodedPath.startsWith("/")) {
+    return `file://${encodedPath}`;
   }
+  return `file:///${encodedPath}`;
+}
+
+function normalizeFsPath(path: string) {
+  try {
+    return decodeURIComponent(path)
+      .replace(/\\/g, "/")
+      .replace(/^\/([a-zA-Z]:\/)/, "$1")
+      .replace(/\/+$/, "");
+  } catch {
+    return path
+      .replace(/\\/g, "/")
+      .replace(/^\/([a-zA-Z]:\/)/, "$1")
+      .replace(/\/+$/, "");
+  }
+}
+
+function isLikelyWindowsFsPath(path: string) {
+  return /^[a-zA-Z]:\//.test(path) || path.startsWith("//");
+}
+
+function normalizeComparablePath(path: string, caseInsensitive: boolean) {
+  const normalized = normalizeFsPath(path);
+  return caseInsensitive ? normalized.toLowerCase() : normalized;
+}
+
+function fileUriToFsPath(fileUri: string) {
+  if (!fileUri.startsWith("file://")) {
+    return null;
+  }
+  try {
+    const url = new URL(fileUri);
+    return normalizeFsPath(url.pathname);
+  } catch {
+    return null;
+  }
+}
+
+function areFileUrisEquivalent(
+  leftUri: string,
+  rightUri: string,
+  caseInsensitive: boolean,
+) {
+  const leftPath = fileUriToFsPath(leftUri);
+  const rightPath = fileUriToFsPath(rightUri);
+  if (!leftPath || !rightPath) {
+    return leftUri === rightUri;
+  }
+  return (
+    normalizeComparablePath(leftPath, caseInsensitive) ===
+    normalizeComparablePath(rightPath, caseInsensitive)
+  );
+}
+
+function relativePathFromFileUri(fileUri: string, workspacePath: string) {
+  const normalizedWorkspace = normalizeFsPath(workspacePath);
+  if (!normalizedWorkspace) {
+    return null;
+  }
+  const caseInsensitive = isLikelyWindowsFsPath(normalizedWorkspace);
+
+  const fromUri = (() => {
+    if (fileUri.startsWith("file://")) {
+      try {
+        const url = new URL(fileUri);
+        return normalizeFsPath(url.pathname);
+      } catch {
+        return null;
+      }
+    }
+    if (fileUri.startsWith("/")) {
+      return normalizeFsPath(fileUri);
+    }
+    return null;
+  })();
+
+  if (!fromUri) {
+    return null;
+  }
+
+  const comparableUri = normalizeComparablePath(fromUri, caseInsensitive);
+  const comparableWorkspace = normalizeComparablePath(
+    normalizedWorkspace,
+    caseInsensitive,
+  );
+  if (comparableUri === comparableWorkspace) {
+    return "";
+  }
+  if (!comparableUri.startsWith(`${comparableWorkspace}/`)) {
+    return null;
+  }
+  return fromUri.slice(normalizedWorkspace.length + 1);
+}
+
+function toNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return null;
+}
+
+function errorMessageFromUnknown(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message;
+    }
+  }
+  return fallback;
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string,
+) {
+  return new Promise<T>((resolve, reject) => {
+    const timerId = window.setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        window.clearTimeout(timerId);
+        resolve(value);
+      })
+      .catch((error) => {
+        window.clearTimeout(timerId);
+        reject(error);
+      });
+  });
+}
+
+function readFreshCache(cache: Map<string, LocationCacheEntry>, key: string) {
+  const cached = cache.get(key);
+  if (!cached) {
+    return null;
+  }
+  if (cached.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function extractLocations(payload: unknown): LspLocationLike[] {
+  const values = Array.isArray(payload)
+    ? payload
+    : Array.isArray((payload as { result?: unknown[] } | null)?.result)
+      ? (payload as { result: unknown[] }).result
+      : [];
+
+  const locations: LspLocationLike[] = [];
+  for (const entry of values) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const value = entry as Record<string, unknown>;
+    const directPath = typeof value.path === "string" ? value.path : null;
+    const directUri = typeof value.uri === "string" ? value.uri : null;
+    const directRange =
+      value.range && typeof value.range === "object"
+        ? (value.range as Record<string, unknown>)
+        : null;
+    const directStart =
+      directRange?.start && typeof directRange.start === "object"
+        ? (directRange.start as Record<string, unknown>)
+        : null;
+
+    if (directUri && directStart) {
+      const line = toNumber(directStart.line);
+      const character = toNumber(directStart.character);
+      if (line !== null && character !== null) {
+        locations.push({
+          uri: directUri,
+          path: directPath,
+          line,
+          character,
+        });
+        continue;
+      }
+    }
+
+    const targetUri = typeof value.targetUri === "string" ? value.targetUri : null;
+    const targetPath = typeof value.targetPath === "string" ? value.targetPath : null;
+    const targetSelectionRange =
+      value.targetSelectionRange && typeof value.targetSelectionRange === "object"
+        ? (value.targetSelectionRange as Record<string, unknown>)
+        : null;
+    const targetRange =
+      value.targetRange && typeof value.targetRange === "object"
+        ? (value.targetRange as Record<string, unknown>)
+        : null;
+    const fallbackTarget = targetSelectionRange ?? targetRange;
+    const fallbackStart =
+      fallbackTarget?.start && typeof fallbackTarget.start === "object"
+        ? (fallbackTarget.start as Record<string, unknown>)
+        : null;
+    if (targetUri && fallbackStart) {
+      const line = toNumber(fallbackStart.line);
+      const character = toNumber(fallbackStart.character);
+      if (line !== null && character !== null) {
+        locations.push({
+          uri: targetUri,
+          path: targetPath,
+          line,
+          character,
+        });
+      }
+    }
+  }
+
+  return locations;
 }
 
 type GitLineMarkers = {
@@ -313,6 +540,8 @@ export function FileViewPanel({
   onSelectOpenAppId,
   editorSplitLayout = "vertical",
   onToggleEditorSplitLayout,
+  navigationTarget = null,
+  onNavigateToLocation,
   onClose,
   onInsertText,
 }: FileViewPanelProps) {
@@ -331,9 +560,21 @@ export function FileViewPanel({
     added: [],
     modified: [],
   });
+  const [isDefinitionLoading, setIsDefinitionLoading] = useState(false);
+  const [isReferencesLoading, setIsReferencesLoading] = useState(false);
+  const [navigationError, setNavigationError] = useState<string | null>(null);
+  const [definitionCandidates, setDefinitionCandidates] = useState<LspLocationLike[]>([]);
+  const [referenceResults, setReferenceResults] = useState<LspLocationLike[] | null>(null);
   const savedContentRef = useRef("");
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const requestIdRef = useRef(0);
+  const lspRequestIdRef = useRef(0);
+  const definitionCacheRef = useRef<Map<string, LocationCacheEntry>>(new Map());
+  const referencesCacheRef = useRef<Map<string, LocationCacheEntry>>(new Map());
+  const recentDefinitionTriggerRef = useRef<RecentTrigger | null>(null);
+  const recentReferencesTriggerRef = useRef<RecentTrigger | null>(null);
+  const appliedNavigationRequestRef = useRef(0);
+  const navigationFocusTimerRef = useRef<number | null>(null);
   const lastReportedLineRangeRef = useRef<string>("");
   const tabsContainerRef = useRef<HTMLDivElement | null>(null);
   const panelRootRef = useRef<HTMLDivElement | null>(null);
@@ -368,6 +609,17 @@ export function FileViewPanel({
     () => resolveAbsolutePath(workspacePath, filePath),
     [workspacePath, filePath],
   );
+  const caseInsensitivePathCompare = useMemo(
+    () => isLikelyWindowsFsPath(normalizeFsPath(workspacePath)),
+    [workspacePath],
+  );
+  const isSameWorkspacePath = useCallback(
+    (leftPath: string, rightPath: string) =>
+      normalizeComparablePath(leftPath, caseInsensitivePathCompare) ===
+      normalizeComparablePath(rightPath, caseInsensitivePathCompare),
+    [caseInsensitivePathCompare],
+  );
+  const currentFileUri = useMemo(() => toFileUri(absolutePath), [absolutePath]);
   const gitAddedLineNumberSet = useMemo(
     () => new Set(gitLineMarkers.added),
     [gitLineMarkers.added],
@@ -491,10 +743,18 @@ export function FileViewPanel({
 
   // Reset mode when file changes
   useEffect(() => {
+    lspRequestIdRef.current += 1;
+    recentDefinitionTriggerRef.current = null;
+    recentReferencesTriggerRef.current = null;
     setMode(initialMode);
     setMdViewMode("rendered");
     onActiveFileLineRangeChange?.(null);
     lastReportedLineRangeRef.current = "";
+    setIsDefinitionLoading(false);
+    setIsReferencesLoading(false);
+    setNavigationError(null);
+    setDefinitionCandidates([]);
+    setReferenceResults(null);
   }, [filePath, initialMode, onActiveFileLineRangeChange]);
 
   // Save handler
@@ -525,7 +785,7 @@ export function FileViewPanel({
 
   // CodeMirror extensions (Mod-s handled inside CM; window-level handles preview mode)
   const cmExtensions = useMemo(() => {
-    const langExt = cmLangExtension(filePath);
+    const langExt = codeMirrorExtensionsForPath(filePath);
     if (gitLineMarkers.added.length === 0 && gitLineMarkers.modified.length === 0) {
       return [...langExt];
     }
@@ -586,6 +846,354 @@ export function FileViewPanel({
     onActiveFileLineRangeChange?.(null);
     lastReportedLineRangeRef.current = "";
   }, [onActiveFileLineRangeChange]);
+
+  const clearNavigationFocusTimer = useCallback(() => {
+    if (navigationFocusTimerRef.current !== null) {
+      window.clearTimeout(navigationFocusTimerRef.current);
+      navigationFocusTimerRef.current = null;
+    }
+  }, []);
+
+  const focusEditorAtLocation = useCallback((line: number, column: number) => {
+    const view = cmRef.current?.view;
+    if (!view) {
+      return false;
+    }
+    if (line < 1 || line > view.state.doc.lines) {
+      return false;
+    }
+    const lineNumber = line;
+    const lineInfo = view.state.doc.line(lineNumber);
+    const safeColumn = Math.max(1, Math.min(column, lineInfo.length + 1));
+    const anchor = lineInfo.from + safeColumn - 1;
+    view.dispatch({
+      selection: { anchor },
+      scrollIntoView: true,
+    });
+    view.focus();
+    return true;
+  }, []);
+
+  const focusEditorAtLocationWithRetry = useCallback(
+    (
+      line: number,
+      column: number,
+      attempt = 0,
+      onFocused?: () => void,
+    ) => {
+      const focused = focusEditorAtLocation(line, column);
+      // Keep re-applying for a few frames even after first success.
+      // This avoids selection being reset by late editor value sync.
+      if (focused && attempt >= 4) {
+        clearNavigationFocusTimer();
+        onFocused?.();
+        return;
+      }
+      if (attempt >= 12) {
+        clearNavigationFocusTimer();
+        return;
+      }
+      clearNavigationFocusTimer();
+      navigationFocusTimerRef.current = window.setTimeout(() => {
+        focusEditorAtLocationWithRetry(line, column, attempt + 1, onFocused);
+      }, 16);
+    },
+    [clearNavigationFocusTimer, focusEditorAtLocation],
+  );
+
+  const navigateToLocation = useCallback(
+    (location: LspLocationLike) => {
+      const relativePathFromUri = relativePathFromFileUri(location.uri, workspacePath);
+      const relativePath =
+        typeof location.path === "string" && location.path.trim().length > 0
+          ? normalizeFsPath(location.path.trim())
+          : relativePathFromUri;
+      const { line, column } = lspPositionToEditorLocation({
+        line: location.line,
+        character: location.character,
+      });
+
+      if (relativePath && onNavigateToLocation) {
+        onNavigateToLocation(relativePath, { line, column });
+        return;
+      }
+
+      const hitsCurrentFileByPath =
+        (relativePath && isSameWorkspacePath(relativePath, filePath)) ||
+        (relativePathFromUri &&
+          isSameWorkspacePath(relativePathFromUri, filePath));
+      if (
+        hitsCurrentFileByPath ||
+        areFileUrisEquivalent(
+          location.uri,
+          currentFileUri,
+          caseInsensitivePathCompare,
+        )
+      ) {
+        setMode("edit");
+        focusEditorAtLocationWithRetry(line, column);
+      }
+    },
+    [
+      caseInsensitivePathCompare,
+      currentFileUri,
+      filePath,
+      focusEditorAtLocationWithRetry,
+      isSameWorkspacePath,
+      onNavigateToLocation,
+      workspacePath,
+    ],
+  );
+
+  const resolveDefinitionAtOffset = useCallback(
+    async (offset: number, view?: EditorView) => {
+      const editorView = view ?? cmRef.current?.view;
+      if (!editorView) {
+        return;
+      }
+      const position = offsetToLspPosition(editorView.state.doc, offset);
+      const queryKey = makeLocationQueryKey(
+        filePath,
+        position.line,
+        position.character,
+      );
+      const now = Date.now();
+      const recentTrigger = recentDefinitionTriggerRef.current;
+      if (
+        recentTrigger &&
+        recentTrigger.key === queryKey &&
+        now - recentTrigger.at < CODE_INTEL_REPEAT_DEBOUNCE_MS
+      ) {
+        return;
+      }
+      recentDefinitionTriggerRef.current = { key: queryKey, at: now };
+      const requestId = lspRequestIdRef.current + 1;
+      lspRequestIdRef.current = requestId;
+      setNavigationError(null);
+      setDefinitionCandidates([]);
+      const cachedLocations = readFreshCache(definitionCacheRef.current, queryKey);
+      if (cachedLocations) {
+        setIsDefinitionLoading(false);
+        if (cachedLocations.length === 0) {
+          setNavigationError(t("files.navigationNoDefinition"));
+          return;
+        }
+        if (cachedLocations.length === 1) {
+          navigateToLocation(cachedLocations[0]);
+          return;
+        }
+        setDefinitionCandidates(cachedLocations);
+        return;
+      }
+      setIsDefinitionLoading(true);
+      try {
+        const response = await withTimeout(
+          getCodeIntelDefinition(workspaceId, {
+            filePath,
+            line: position.line,
+            character: position.character,
+          }),
+          NAVIGATION_REQUEST_TIMEOUT_MS,
+          t("files.navigationTimeout"),
+        );
+        if (requestId !== lspRequestIdRef.current) {
+          return;
+        }
+        const locations = extractLocations(response.result);
+        definitionCacheRef.current.set(queryKey, {
+          expiresAt: Date.now() + CODE_INTEL_CACHE_TTL_MS,
+          value: locations,
+        });
+        if (locations.length === 0) {
+          setNavigationError(t("files.navigationNoDefinition"));
+          return;
+        }
+        if (locations.length === 1) {
+          navigateToLocation(locations[0]);
+          return;
+        }
+        setDefinitionCandidates(locations);
+      } catch (error) {
+        if (requestId !== lspRequestIdRef.current) {
+          return;
+        }
+        setNavigationError(errorMessageFromUnknown(error, t("files.navigationError")));
+      } finally {
+        if (requestId === lspRequestIdRef.current) {
+          setIsDefinitionLoading(false);
+        }
+      }
+    },
+    [filePath, navigateToLocation, t, workspaceId],
+  );
+
+  const findReferencesAtOffset = useCallback(
+    async (offset: number) => {
+      const editorView = cmRef.current?.view;
+      if (!editorView) {
+        return;
+      }
+      const position = offsetToLspPosition(editorView.state.doc, offset);
+      const queryKey = makeLocationQueryKey(
+        filePath,
+        position.line,
+        position.character,
+        false,
+      );
+      const now = Date.now();
+      const recentTrigger = recentReferencesTriggerRef.current;
+      if (
+        recentTrigger &&
+        recentTrigger.key === queryKey &&
+        now - recentTrigger.at < CODE_INTEL_REPEAT_DEBOUNCE_MS
+      ) {
+        return;
+      }
+      recentReferencesTriggerRef.current = { key: queryKey, at: now };
+      const requestId = lspRequestIdRef.current + 1;
+      lspRequestIdRef.current = requestId;
+      setNavigationError(null);
+      setReferenceResults(null);
+      const cachedLocations = readFreshCache(referencesCacheRef.current, queryKey);
+      if (cachedLocations) {
+        setIsReferencesLoading(false);
+        setReferenceResults(cachedLocations);
+        return;
+      }
+      setIsReferencesLoading(true);
+      try {
+        const response = await withTimeout(
+          getCodeIntelReferences(workspaceId, {
+            filePath,
+            line: position.line,
+            character: position.character,
+          }),
+          NAVIGATION_REQUEST_TIMEOUT_MS,
+          t("files.navigationTimeout"),
+        );
+        if (requestId !== lspRequestIdRef.current) {
+          return;
+        }
+        const locations = extractLocations(response.result);
+        referencesCacheRef.current.set(queryKey, {
+          expiresAt: Date.now() + CODE_INTEL_CACHE_TTL_MS,
+          value: locations,
+        });
+        setReferenceResults(locations);
+      } catch (error) {
+        if (requestId !== lspRequestIdRef.current) {
+          return;
+        }
+        setNavigationError(errorMessageFromUnknown(error, t("files.navigationError")));
+      } finally {
+        if (requestId === lspRequestIdRef.current) {
+          setIsReferencesLoading(false);
+        }
+      }
+    },
+    [filePath, t, workspaceId],
+  );
+
+  const runDefinitionFromCursor = useCallback(() => {
+    const view = cmRef.current?.view;
+    if (!view) {
+      return;
+    }
+    void resolveDefinitionAtOffset(view.state.selection.main.head, view);
+  }, [resolveDefinitionAtOffset]);
+
+  const runReferencesFromCursor = useCallback(() => {
+    const view = cmRef.current?.view;
+    if (!view) {
+      return;
+    }
+    void findReferencesAtOffset(view.state.selection.main.head);
+  }, [findReferencesAtOffset]);
+
+  const editorNavigationKeymapExt = useMemo(
+    () =>
+      keymap.of([
+        {
+          key: "Mod-b",
+          run: () => {
+            runDefinitionFromCursor();
+            return true;
+          },
+        },
+        {
+          key: "Alt-F7",
+          run: () => {
+            runReferencesFromCursor();
+            return true;
+          },
+        },
+      ]),
+    [runDefinitionFromCursor, runReferencesFromCursor],
+  );
+
+  const ctrlClickDefinitionExt = useMemo(
+    () =>
+      EditorView.domEventHandlers({
+        mousedown: (event, view) => {
+          if (event.button !== 0) {
+            return false;
+          }
+          if (!(event.metaKey || event.ctrlKey)) {
+            return false;
+          }
+          const offset = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          if (offset == null) {
+            return false;
+          }
+          event.preventDefault();
+          void resolveDefinitionAtOffset(offset, view);
+          return true;
+        },
+      }),
+    [resolveDefinitionAtOffset],
+  );
+
+  useEffect(() => {
+    clearNavigationFocusTimer();
+    return () => {
+      clearNavigationFocusTimer();
+    };
+  }, [clearNavigationFocusTimer, filePath]);
+
+  useEffect(() => {
+    if (!navigationTarget) {
+      return;
+    }
+    if (!isSameWorkspacePath(navigationTarget.path, filePath)) {
+      return;
+    }
+    if (navigationTarget.requestId === appliedNavigationRequestRef.current) {
+      return;
+    }
+    if (isLoading) {
+      return;
+    }
+    if (mode !== "edit") {
+      setMode("edit");
+      return;
+    }
+
+    focusEditorAtLocationWithRetry(
+      navigationTarget.line,
+      navigationTarget.column,
+      0,
+      () => {
+        appliedNavigationRequestRef.current = navigationTarget.requestId;
+      },
+    );
+  }, [
+    filePath,
+    focusEditorAtLocationWithRetry,
+    isSameWorkspacePath,
+    isLoading,
+    mode,
+    navigationTarget,
+  ]);
 
   // Syntax highlighted lines for code preview
   const language = useMemo(() => languageFromPath(filePath), [filePath]);
@@ -840,6 +1448,34 @@ export function FileViewPanel({
                 <button
                   type="button"
                   className="ghost fvp-action-btn"
+                  onClick={runDefinitionFromCursor}
+                  aria-busy={isDefinitionLoading}
+                  title={t("files.gotoDefinition")}
+                >
+                  <Code size={14} aria-hidden />
+                  <span>
+                    {isDefinitionLoading
+                      ? t("files.navigating")
+                      : t("files.gotoDefinition")}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="ghost fvp-action-btn"
+                  onClick={runReferencesFromCursor}
+                  aria-busy={isReferencesLoading}
+                  title={t("files.findReferences")}
+                >
+                  <Search size={14} aria-hidden />
+                  <span>
+                    {isReferencesLoading
+                      ? t("files.searchingReferences")
+                      : t("files.findReferences")}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="ghost fvp-action-btn"
                   onClick={handleEnterPreview}
                 >
                   <Eye size={14} aria-hidden />
@@ -987,7 +1623,12 @@ export function FileViewPanel({
                   lastReportedLineRangeRef.current = rangeKey;
                   onActiveFileLineRangeChange?.({ startLine, endLine });
                 }}
-                extensions={[saveKeymapExt, ...cmExtensions]}
+                extensions={[
+                  saveKeymapExt,
+                  editorNavigationKeymapExt,
+                  ctrlClickDefinitionExt,
+                  ...cmExtensions,
+                ]}
                 theme="dark"
                 className="fvp-cm"
                 basicSetup={{
@@ -1035,7 +1676,12 @@ export function FileViewPanel({
               lastReportedLineRangeRef.current = rangeKey;
               onActiveFileLineRangeChange?.({ startLine, endLine });
             }}
-            extensions={[saveKeymapExt, ...cmExtensions]}
+            extensions={[
+              saveKeymapExt,
+              editorNavigationKeymapExt,
+              ctrlClickDefinitionExt,
+              ...cmExtensions,
+            ]}
             theme="dark"
             className="fvp-cm"
             basicSetup={{
@@ -1189,6 +1835,98 @@ export function FileViewPanel({
     </div>
   );
 
+  const renderNavigationPanel = () => {
+    const hasDefinitionCandidates = definitionCandidates.length > 0;
+    const hasReferenceResults = referenceResults !== null;
+    if (!navigationError && !hasDefinitionCandidates && !hasReferenceResults) {
+      return null;
+    }
+
+    return (
+      <div className="fvp-navigation-panel">
+        {navigationError ? (
+          <div className="fvp-navigation-error">{navigationError}</div>
+        ) : null}
+        {hasDefinitionCandidates ? (
+          <div className="fvp-navigation-section">
+            <div className="fvp-navigation-header">
+              <span>{t("files.definitionCandidates")}</span>
+              <button
+                type="button"
+                className="ghost fvp-navigation-close"
+                onClick={() => setDefinitionCandidates([])}
+              >
+                {t("common.close")}
+              </button>
+            </div>
+            <ul className="fvp-navigation-list">
+              {definitionCandidates.map((location, index) => {
+                const relativePath = relativePathFromFileUri(location.uri, workspacePath);
+                const path = relativePath || location.uri;
+                return (
+                  <li key={`${location.uri}-${location.line}-${location.character}-${index}`}>
+                    <button
+                      type="button"
+                      className="fvp-navigation-item"
+                      onClick={() => navigateToLocation(location)}
+                    >
+                      <span className="fvp-navigation-path" title={path}>
+                        {path}
+                      </span>
+                      <span className="fvp-navigation-line">
+                        L{location.line + 1}:C{location.character + 1}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+        {hasReferenceResults ? (
+          <div className="fvp-navigation-section">
+            <div className="fvp-navigation-header">
+              <span>{t("files.referenceResults")}</span>
+              <button
+                type="button"
+                className="ghost fvp-navigation-close"
+                onClick={() => setReferenceResults(null)}
+              >
+                {t("common.close")}
+              </button>
+            </div>
+            {referenceResults && referenceResults.length > 0 ? (
+              <ul className="fvp-navigation-list">
+                {referenceResults.map((location, index) => {
+                  const relativePath = relativePathFromFileUri(location.uri, workspacePath);
+                  const path = relativePath || location.uri;
+                  return (
+                    <li key={`${location.uri}-${location.line}-${location.character}-${index}`}>
+                      <button
+                        type="button"
+                        className="fvp-navigation-item"
+                        onClick={() => navigateToLocation(location)}
+                      >
+                        <span className="fvp-navigation-path" title={path}>
+                          {path}
+                        </span>
+                        <span className="fvp-navigation-line">
+                          L{location.line + 1}:C{location.character + 1}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="fvp-navigation-empty">{t("files.noReferencesFound")}</div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div className="fvp" ref={panelRootRef}>
       {renderTabs()}
@@ -1211,6 +1949,7 @@ export function FileViewPanel({
       ) : null}
       {renderTopbar()}
       <div className="fvp-body">{renderContent()}</div>
+      {renderNavigationPanel()}
       {renderFooter()}
     </div>
   );

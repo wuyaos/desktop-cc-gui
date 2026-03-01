@@ -914,6 +914,111 @@ export async function getOpenCodeLspDocumentSymbols(
   });
 }
 
+export async function getCodeIntelDefinition(
+  workspaceId: string,
+  input: {
+    filePath: string;
+    line: number;
+    character: number;
+  },
+) {
+  return invoke<{
+    filePath: string;
+    line: number;
+    character: number;
+    result: unknown;
+  }>("code_intel_definition", {
+    workspaceId,
+    filePath: input.filePath,
+    line: input.line,
+    character: input.character,
+  });
+}
+
+export async function getCodeIntelReferences(
+  workspaceId: string,
+  input: {
+    filePath: string;
+    line: number;
+    character: number;
+    includeDeclaration?: boolean;
+  },
+) {
+  return invoke<{
+    filePath: string;
+    line: number;
+    character: number;
+    includeDeclaration: boolean;
+    result: unknown;
+  }>("code_intel_references", {
+    workspaceId,
+    filePath: input.filePath,
+    line: input.line,
+    character: input.character,
+    includeDeclaration: input.includeDeclaration ?? false,
+  });
+}
+
+export type LspPosition = {
+  line: number;
+  character: number;
+};
+
+export type LspRange = {
+  start: LspPosition;
+  end: LspPosition;
+};
+
+export type LspLocation = {
+  uri: string;
+  range: LspRange;
+};
+
+export async function getOpenCodeLspDefinition(
+  workspaceId: string,
+  input: {
+    fileUri: string;
+    line: number;
+    character: number;
+  },
+) {
+  return invoke<{
+    fileUri: string;
+    line: number;
+    character: number;
+    result: unknown;
+  }>("opencode_lsp_definition", {
+    workspaceId,
+    fileUri: input.fileUri,
+    line: input.line,
+    character: input.character,
+  });
+}
+
+export async function getOpenCodeLspReferences(
+  workspaceId: string,
+  input: {
+    fileUri: string;
+    line: number;
+    character: number;
+    includeDeclaration?: boolean;
+  },
+) {
+  return invoke<{
+    fileUri: string;
+    line: number;
+    character: number;
+    includeDeclaration: boolean;
+    result: unknown;
+  }>("opencode_lsp_references", {
+    workspaceId,
+    fileUri: input.fileUri,
+    line: input.line,
+    character: input.character,
+    includeDeclaration: input.includeDeclaration ?? false,
+  });
+}
+
 export async function getPromptsList(workspaceId: string) {
   return invoke<any>("prompts_list", { workspaceId });
 }

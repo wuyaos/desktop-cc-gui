@@ -21,6 +21,7 @@ mod backend;
 mod agents;
 mod claude_commands;
 mod client_storage;
+mod code_intel;
 mod codex;
 mod dictation;
 mod engine;
@@ -169,6 +170,8 @@ pub fn run() {
             // Files
             files::file_read,
             files::file_write,
+            code_intel::code_intel_definition,
+            code_intel::code_intel_references,
             // Menu
             menu::menu_set_accelerators,
             menu::menu_update_labels,
@@ -200,6 +203,8 @@ pub fn run() {
             engine::opencode_lsp_diagnostics,
             engine::opencode_lsp_symbols,
             engine::opencode_lsp_document_symbols,
+            engine::opencode_lsp_definition,
+            engine::opencode_lsp_references,
             engine::engine_send_message,
             engine::engine_send_message_sync,
             engine::engine_interrupt,

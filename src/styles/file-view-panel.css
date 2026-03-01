@@ -656,6 +656,108 @@
   min-width: 0;
 }
 
+/* ── Navigation panel ── */
+
+.fvp-navigation-panel {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 90%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(34vh, 260px);
+  overflow: auto;
+  padding: 8px 12px;
+}
+
+.fvp-navigation-section {
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-control) 68%, transparent);
+}
+
+.fvp-navigation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.fvp-navigation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fvp-navigation-item {
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 11px;
+}
+
+.fvp-navigation-item:hover {
+  background: color-mix(in srgb, var(--surface-hover) 70%, transparent);
+}
+
+.fvp-navigation-path {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-family: var(--code-font-family);
+}
+
+.fvp-navigation-line {
+  color: var(--text-faint);
+  font-family: var(--code-font-family);
+  white-space: nowrap;
+}
+
+.fvp-navigation-error {
+  border: 1px solid color-mix(in srgb, var(--status-error) 65%, var(--border-subtle));
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 10%, transparent);
+}
+
+.fvp-navigation-empty {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.fvp-navigation-close {
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-control) 85%, transparent);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 2px 8px;
+  line-height: 1.2;
+}
+
+.fvp-navigation-close:hover {
+  color: var(--text-strong);
+}
+
 /* ── Footer ── */
 
 .fvp-footer {

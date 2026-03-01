@@ -12,6 +12,32 @@ afterEach(() => {
 });
 
 describe("FilePreviewPopover", () => {
+  it("applies syntax highlighting for spring properties preview", () => {
+    const { container } = render(
+      <FilePreviewPopover
+        path="src/main/resources/application.properties"
+        absolutePath="/workspace/src/main/resources/application.properties"
+        content={"server.port=8080"}
+        truncated={false}
+        previewKind="text"
+        imageSrc={null}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        selection={null}
+        onSelectLine={vi.fn()}
+        onClearSelection={vi.fn()}
+        onAddSelection={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const lineText = container.querySelector(".file-preview-line-text");
+    expect(lineText).not.toBeNull();
+    expect(lineText?.innerHTML).toContain("token");
+  });
+
   it("renders selection hints for text previews", () => {
     render(
       <FilePreviewPopover

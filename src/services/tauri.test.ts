@@ -34,6 +34,10 @@ import {
   writeAgentMd,
   connectOpenCodeProvider,
   getOpenCodeProviderHealth,
+  getCodeIntelDefinition,
+  getCodeIntelReferences,
+  getOpenCodeLspDefinition,
+  getOpenCodeLspReferences,
   getOpenCodeStatusSnapshot,
   listExternalSpecTree,
   setOpenCodeMcpToggle,
@@ -704,6 +708,130 @@ describe("tauri invoke wrappers", () => {
       serverName: "fs",
       enabled: false,
       globalEnabled: null,
+    });
+  });
+
+  it("maps opencode lsp definition params", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      fileUri: "file:///tmp/ws/src/Main.java",
+      line: 10,
+      character: 4,
+      result: [],
+    });
+
+    await getOpenCodeLspDefinition("ws-lsp-1", {
+      fileUri: "file:///tmp/ws/src/Main.java",
+      line: 10,
+      character: 4,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("opencode_lsp_definition", {
+      workspaceId: "ws-lsp-1",
+      fileUri: "file:///tmp/ws/src/Main.java",
+      line: 10,
+      character: 4,
+    });
+  });
+
+  it("maps code intel definition params", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      filePath: "src/Main.java",
+      line: 10,
+      character: 4,
+      result: [],
+    });
+
+    await getCodeIntelDefinition("ws-ci-1", {
+      filePath: "src/Main.java",
+      line: 10,
+      character: 4,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("code_intel_definition", {
+      workspaceId: "ws-ci-1",
+      filePath: "src/Main.java",
+      line: 10,
+      character: 4,
+    });
+  });
+
+  it("propagates code intel definition errors", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockRejectedValueOnce(new Error("code intel unavailable"));
+
+    await expect(
+      getCodeIntelDefinition("ws-ci-err-1", {
+        filePath: "src/Main.java",
+        line: 1,
+        character: 1,
+      }),
+    ).rejects.toThrow("code intel unavailable");
+  });
+
+  it("maps code intel references params", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      filePath: "src/Main.java",
+      line: 11,
+      character: 8,
+      includeDeclaration: false,
+      result: [],
+    });
+
+    await getCodeIntelReferences("ws-ci-2", {
+      filePath: "src/Main.java",
+      line: 11,
+      character: 8,
+      includeDeclaration: false,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("code_intel_references", {
+      workspaceId: "ws-ci-2",
+      filePath: "src/Main.java",
+      line: 11,
+      character: 8,
+      includeDeclaration: false,
+    });
+  });
+
+  it("propagates code intel references errors", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockRejectedValueOnce(new Error("references unavailable"));
+
+    await expect(
+      getCodeIntelReferences("ws-ci-err-2", {
+        filePath: "src/Main.java",
+        line: 2,
+        character: 3,
+      }),
+    ).rejects.toThrow("references unavailable");
+  });
+
+  it("maps opencode lsp references params", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      fileUri: "file:///tmp/ws/src/Main.java",
+      line: 11,
+      character: 8,
+      includeDeclaration: true,
+      result: [],
+    });
+
+    await getOpenCodeLspReferences("ws-lsp-2", {
+      fileUri: "file:///tmp/ws/src/Main.java",
+      line: 11,
+      character: 8,
+      includeDeclaration: true,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("opencode_lsp_references", {
+      workspaceId: "ws-lsp-2",
+      fileUri: "file:///tmp/ws/src/Main.java",
+      line: 11,
+      character: 8,
+      includeDeclaration: true,
     });
   });
 

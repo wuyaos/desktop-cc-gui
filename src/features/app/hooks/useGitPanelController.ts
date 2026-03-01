@@ -19,6 +19,16 @@ function readGitDiffListView(workspaceId: string | null | undefined): "flat" | "
   return viewByWorkspace?.[workspaceId] === "tree" ? "tree" : "flat";
 }
 
+export type EditorNavigationLocation = {
+  line: number;
+  column: number;
+};
+
+export type EditorNavigationTarget = EditorNavigationLocation & {
+  path: string;
+  requestId: number;
+};
+
 export function useGitPanelController({
   activeWorkspace,
   gitDiffPreloadEnabled,
@@ -45,6 +55,9 @@ export function useGitPanelController({
   const [centerMode, setCenterMode] = useState<"chat" | "diff" | "editor" | "memory">("chat");
   const [openFileTabs, setOpenFileTabs] = useState<string[]>([]);
   const [activeEditorFilePath, setActiveEditorFilePath] = useState<string | null>(null);
+  const [editorNavigationTarget, setEditorNavigationTarget] =
+    useState<EditorNavigationTarget | null>(null);
+  const navigationRequestIdRef = useRef(0);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const [diffScrollRequestId, setDiffScrollRequestId] = useState(0);
   const pendingDiffScrollRef = useRef(false);
@@ -272,9 +285,18 @@ export function useGitPanelController({
   );
 
   const handleOpenFile = useCallback(
-    (path: string) => {
+    (path: string, location?: EditorNavigationLocation) => {
       setOpenFileTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
       setActiveEditorFilePath(path);
+      if (location) {
+        navigationRequestIdRef.current += 1;
+        setEditorNavigationTarget({
+          path,
+          line: location.line,
+          column: location.column,
+          requestId: navigationRequestIdRef.current,
+        });
+      }
       setCenterMode("editor");
       if (isCompact) {
         setActiveTab("codex");
@@ -291,6 +313,7 @@ export function useGitPanelController({
       return prev;
     });
     setActiveEditorFilePath(path);
+    setEditorNavigationTarget(null);
     setCenterMode("editor");
   }, []);
 
@@ -314,6 +337,9 @@ export function useGitPanelController({
           }
           return fallback;
         });
+        setEditorNavigationTarget((current) =>
+          current && current.path === path ? null : current,
+        );
         return nextTabs;
       });
     },
@@ -323,6 +349,7 @@ export function useGitPanelController({
   const handleCloseAllFileTabs = useCallback(() => {
     setOpenFileTabs([]);
     setActiveEditorFilePath(null);
+    setEditorNavigationTarget(null);
     setCenterMode("chat");
   }, []);
 
@@ -330,6 +357,7 @@ export function useGitPanelController({
     setCenterMode("chat");
     setOpenFileTabs([]);
     setActiveEditorFilePath(null);
+    setEditorNavigationTarget(null);
   }, []);
 
   useEffect(() => {
@@ -360,6 +388,7 @@ export function useGitPanelController({
     setCenterMode,
     openFileTabs,
     activeEditorFilePath,
+    editorNavigationTarget,
     selectedDiffPath,
     setSelectedDiffPath,
     diffScrollRequestId,

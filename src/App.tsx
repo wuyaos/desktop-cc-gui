@@ -590,6 +590,7 @@ function MainApp() {
     handleActiveDiffPath,
     handleGitPanelModeChange,
     activeEditorFilePath,
+    editorNavigationTarget,
     openFileTabs,
     handleOpenFile,
     handleActivateFileTab,
@@ -614,7 +615,7 @@ function MainApp() {
     startLine: number;
     endLine: number;
   } | null>(null);
-  const [fileReferenceMode, setFileReferenceMode] = useState<"path" | "none">("path");
+  const [fileReferenceMode, setFileReferenceMode] = useState<"path" | "none">("none");
   const [editorSplitLayout, setEditorSplitLayout] = useState<"vertical" | "horizontal">(
     "vertical",
   );
@@ -3885,6 +3886,7 @@ function MainApp() {
     onToggleEditorSplitLayout: () =>
       setEditorSplitLayout((prev) => (prev === "vertical" ? "horizontal" : "vertical")),
     editorFilePath: activeEditorFilePath,
+    editorNavigationTarget,
     openEditorTabs: openFileTabs,
     onActivateEditorTab: handleActivateFileTab,
     onCloseEditorTab: handleCloseFileTab,
