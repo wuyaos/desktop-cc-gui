@@ -75,6 +75,12 @@ const THREAD_LIST_MAX_EMPTY_PAGES_WITH_ACTIVITY = 20;
 const THREAD_LIST_MAX_TOTAL_PAGES = 40;
 const THREAD_LIST_MAX_EMPTY_PAGES_LOAD_OLDER = 10;
 const EXCLUDED_THREAD_SOURCES = new Set(["vscode"]);
+const CODEX_BACKGROUND_HELPER_PROMPT_PREFIXES = [
+  "Generate a concise title for a coding chat thread from the first user message.",
+  "You create concise run metadata for a coding task.",
+  "You are generating OpenSpec project context.",
+  "Generate a concise git commit message for the following changes.",
+] as const;
 
 function normalizeComparableWorkspacePath(path: string): string {
   return normalizeRootPath(path).trim();
@@ -137,6 +143,19 @@ function isArchivedThread(thread: Record<string, unknown>): boolean {
 
 function shouldIncludeThreadEntry(thread: Record<string, unknown>): boolean {
   if (isArchivedThread(thread)) {
+    return false;
+  }
+  const previewCandidates = [
+    asString(thread.preview).trim(),
+    asString(thread.title).trim(),
+    asString(thread.name).trim(),
+  ].filter(Boolean);
+  const isCodexHelperThread = previewCandidates.some((preview) =>
+    CODEX_BACKGROUND_HELPER_PROMPT_PREFIXES.some((prefix) =>
+      preview.startsWith(prefix),
+    ),
+  );
+  if (isCodexHelperThread) {
     return false;
   }
   const source = asString(thread.source).trim().toLowerCase();

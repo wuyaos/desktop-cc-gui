@@ -25,6 +25,31 @@ function inferEngineFromThreadId(threadId: string): "claude" | "codex" | "openco
   return "codex";
 }
 
+const CODEX_BACKGROUND_HELPER_PREVIEW_PREFIXES = [
+  "Generate a concise title for a coding chat thread from the first user message.",
+  "You create concise run metadata for a coding task.",
+  "You are generating OpenSpec project context.",
+  "Generate a concise git commit message for the following changes.",
+] as const;
+
+function isCodexBackgroundHelperThread(
+  threadId: string,
+  thread: Record<string, unknown>,
+): boolean {
+  if (inferEngineFromThreadId(threadId) !== "codex") {
+    return false;
+  }
+  const previewCandidates = [
+    asString(thread.preview).trim(),
+    asString(thread.title).trim(),
+  ].filter(Boolean);
+  return previewCandidates.some((preview) =>
+    CODEX_BACKGROUND_HELPER_PREVIEW_PREFIXES.some((prefix) =>
+      preview.startsWith(prefix),
+    ),
+  );
+}
+
 type UseThreadTurnEventsOptions = {
   dispatch: Dispatch<ThreadAction>;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
@@ -109,6 +134,10 @@ export function useThreadTurnEvents({
     (workspaceId: string, thread: Record<string, unknown>) => {
       const threadId = asString(thread.id);
       if (!threadId) {
+        return;
+      }
+      if (isCodexBackgroundHelperThread(threadId, thread)) {
+        dispatch({ type: "hideThread", workspaceId, threadId });
         return;
       }
       if (isThreadHidden(workspaceId, threadId)) {

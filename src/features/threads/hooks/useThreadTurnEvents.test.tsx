@@ -208,6 +208,67 @@ describe("useThreadTurnEvents", () => {
     expect(safeMessageActivity).not.toHaveBeenCalled();
   });
 
+  it("suppresses Codex helper threads on thread started", () => {
+    const { result, dispatch, recordThreadActivity, safeMessageActivity } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "thread-helper-1",
+        preview:
+          "You are generating OpenSpec project context.\nReturn ONLY valid JSON with keys:",
+        updatedAt: 1_700_000_000_250,
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "thread-helper-1",
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        threadId: "thread-helper-1",
+      }),
+    );
+    expect(recordThreadActivity).not.toHaveBeenCalled();
+    expect(safeMessageActivity).not.toHaveBeenCalled();
+  });
+
+  it("does not suppress non-Codex threads even when preview resembles helper prompts", () => {
+    const { result, dispatch, recordThreadActivity, safeMessageActivity } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "claude:session-1",
+        preview:
+          "You are generating OpenSpec project context.\nReturn ONLY valid JSON with keys:",
+        updatedAt: 1_700_000_000_260,
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "hideThread",
+        workspaceId: "ws-1",
+        threadId: "claude:session-1",
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      engine: "claude",
+    });
+    expect(recordThreadActivity).toHaveBeenCalledWith(
+      "ws-1",
+      "claude:session-1",
+      1_700_000_000_260,
+    );
+    expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
   it("marks processing and active turn on turn started", () => {
     const { result, dispatch, markProcessing, setActiveTurnId } = makeOptions();
 
