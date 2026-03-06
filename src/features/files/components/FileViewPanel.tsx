@@ -11,6 +11,7 @@ import Columns2 from "lucide-react/dist/esm/icons/columns-2";
 import Pencil from "lucide-react/dist/esm/icons/pencil";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import Code from "lucide-react/dist/esm/icons/code";
+import FileSearch from "lucide-react/dist/esm/icons/file-search";
 import Maximize2 from "lucide-react/dist/esm/icons/maximize-2";
 import Minimize2 from "lucide-react/dist/esm/icons/minimize-2";
 import Rows2 from "lucide-react/dist/esm/icons/rows-2";
@@ -1489,39 +1490,41 @@ export function FileViewPanel({
       <div className="fvp-topbar-right">
         {!isBinary && (
           <>
-            {isMarkdown && mode === "preview" && (
-              <div className="fvp-toggle-group">
+            {mode === "preview" ? (
+              <div className="fvp-action-group fvp-preview-tools" role="group">
+                {isMarkdown && (
+                  <>
+                    <button
+                      type="button"
+                      className={`fvp-action-btn ${mdViewMode === "rendered" ? "is-active" : ""}`}
+                      onClick={() => setMdViewMode("rendered")}
+                    >
+                      <Eye size={14} aria-hidden />
+                      <span>{t("files.preview")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`fvp-action-btn ${mdViewMode === "source" ? "is-active" : ""}`}
+                      onClick={() => setMdViewMode("source")}
+                    >
+                      <Code size={14} aria-hidden />
+                      <span>{t("files.source")}</span>
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
-                  className={`ghost fvp-toggle-btn ${mdViewMode === "rendered" ? "is-active" : ""}`}
-                  onClick={() => setMdViewMode("rendered")}
+                  className="fvp-action-btn"
+                  onClick={handleEnterEdit}
+                  disabled={truncated}
+                  title={truncated ? t("files.fileTooLarge") : t("files.edit")}
                 >
-                  <Eye size={14} aria-hidden />
-                  <span>{t("files.preview")}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`ghost fvp-toggle-btn ${mdViewMode === "source" ? "is-active" : ""}`}
-                  onClick={() => setMdViewMode("source")}
-                >
-                  <Code size={14} aria-hidden />
-                  <span>{t("files.source")}</span>
+                  <Pencil size={14} aria-hidden />
+                  <span>{t("files.edit")}</span>
                 </button>
               </div>
-            )}
-            {mode === "preview" ? (
-              <button
-                type="button"
-                className="ghost fvp-action-btn"
-                onClick={handleEnterEdit}
-                disabled={truncated}
-                title={truncated ? t("files.fileTooLarge") : t("files.edit")}
-              >
-                <Pencil size={14} aria-hidden />
-                <span>{t("files.edit")}</span>
-              </button>
             ) : (
-              <>
+              <div className="fvp-action-group" role="group">
                 <button
                   type="button"
                   className="ghost fvp-action-btn"
@@ -1567,7 +1570,7 @@ export function FileViewPanel({
                   <Save size={14} aria-hidden />
                   <span>{isSaving ? t("files.saving") : isDirty ? t("files.save") : t("files.saved")}</span>
                 </button>
-              </>
+              </div>
             )}
           </>
         )}
@@ -1874,7 +1877,7 @@ export function FileViewPanel({
             title={t("files.openFind")}
             onClick={handleOpenFindPanel}
           >
-            <Search size={12} aria-hidden />
+            <FileSearch size={12} aria-hidden />
           </button>
         ) : null}
         {onToggleEditorFileMaximized ? (

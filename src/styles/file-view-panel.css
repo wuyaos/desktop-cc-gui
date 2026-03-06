@@ -276,38 +276,7 @@
   flex-shrink: 0;
 }
 
-/* Toggle group (Preview / Source) */
-
-.fvp-toggle-group {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  background: var(--surface-control);
-  border-radius: 8px;
-  padding: 2px;
-  border: 1px solid var(--border-subtle);
-}
-
-.fvp-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  font-size: 11px;
-  border-radius: 6px;
-  color: var(--text-muted);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.fvp-toggle-btn.is-active {
-  background: var(--surface-strong);
-  color: var(--text-strong);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-}
-
-/* Action buttons */
+/* Action items */
 
 .fvp-action-btn {
   display: inline-flex;
@@ -317,6 +286,62 @@
   font-size: 11px;
   border-radius: 8px;
   white-space: nowrap;
+}
+
+.fvp-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 82%, #d1d5db 18%);
+  background: transparent;
+  box-shadow: none;
+  padding: 0 0 1px;
+}
+
+.fvp-action-group .fvp-action-btn {
+  border: none;
+  border-radius: 0;
+  min-height: 24px;
+  padding: 2px 0;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+
+.fvp-action-group .fvp-action-btn:hover:not(:disabled) {
+  color: var(--text-strong);
+  opacity: 0.95;
+}
+
+.fvp-action-group .fvp-action-btn.is-active {
+  color: var(--text-strong);
+}
+
+.fvp-action-group .fvp-action-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--border-accent) 56%, transparent);
+  outline-offset: 3px;
+}
+
+.fvp-action-group .fvp-action-btn.primary {
+  background: transparent;
+  color: var(--text-strong);
+}
+
+.fvp-action-group .fvp-action-btn.primary:hover:not(:disabled) {
+  background: transparent;
+}
+
+.fvp-action-group .fvp-save-btn {
+  min-width: auto;
+  justify-content: center;
+}
+
+.fvp-action-group .fvp-save-btn.is-saved {
+  opacity: 0.75;
 }
 
 .fvp-save-btn {
