@@ -147,7 +147,7 @@ Your Stars and recommendations help more people discover this project. Thank you
 
 ### License
 
-[MIT](https://github.com/zhukunpenglinyutong/idea-claude-code-gui?tab=MIT-1-ov-file)
+[MIT](https://github.com/zhukunpenglinyutong/mossx?tab=MIT-1-ov-file)
 
 ---
 

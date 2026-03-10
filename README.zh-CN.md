@@ -146,7 +146,7 @@ npm run test          # 运行前端测试
 
 ### License
 
-[MIT](https://github.com/zhukunpenglinyutong/idea-claude-code-gui?tab=MIT-1-ov-file)
+[MIT](https://github.com/zhukunpenglinyutong/mossx?tab=MIT-1-ov-file)
 
 ---
 
