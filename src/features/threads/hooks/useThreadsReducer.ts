@@ -1160,6 +1160,19 @@ function findAssistantMessageIndexById(
   return -1;
 }
 
+function findReasoningIndexById(list: ConversationItem[], candidateId: string) {
+  if (!candidateId) {
+    return -1;
+  }
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const item = list[index];
+    if (item.kind === "reasoning" && item.id === candidateId) {
+      return index;
+    }
+  }
+  return -1;
+}
+
 function findAssistantMessageIndexByPrefix(
   list: ConversationItem[],
   idPrefix: string,
@@ -1179,6 +1192,21 @@ function findAssistantMessageIndexByPrefix(
     }
   }
   return -1;
+}
+
+function resolveLiveAssistantMessageId(
+  state: ThreadState,
+  threadId: string,
+  itemId: string,
+) {
+  const segment = state.agentSegmentByThread[threadId] ?? 0;
+  const activeTurnId = state.activeTurnIdByThread[threadId] ?? null;
+  if (isLocalCliReasoningThread(threadId) && activeTurnId) {
+    return segment > 0
+      ? `assistant-live:${activeTurnId}:seg-${segment}`
+      : `assistant-live:${activeTurnId}`;
+  }
+  return segment > 0 ? `${itemId}-seg-${segment}` : itemId;
 }
 
 function addSummaryBoundary(existing: string) {
@@ -1843,14 +1871,19 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     }
     case "appendAgentDelta": {
-      // 使用分段 ID：当 tool item 开始时会增加 segment，确保文本和工具交替显示
-      const segment = state.agentSegmentByThread[action.threadId] ?? 0;
-      const segmentedItemId = segment > 0 ? `${action.itemId}-seg-${segment}` : action.itemId;
+      const segmentedItemId = resolveLiveAssistantMessageId(
+        state,
+        action.threadId,
+        action.itemId,
+      );
 
       const list = [...(state.itemsByThread[action.threadId] ?? [])];
-      const index = list.findIndex((msg) => msg.id === segmentedItemId);
-      if (index >= 0 && list[index].kind === "message") {
+      const index = findAssistantMessageIndexById(list, segmentedItemId);
+      if (index >= 0) {
         const existing = list[index];
+        if (existing.kind !== "message" || existing.role !== "assistant") {
+          return state;
+        }
         list[index] = {
           ...existing,
           text: mergeAgentMessageText(existing.text, action.delta),
@@ -1882,8 +1915,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     }
     case "completeAgentMessage": {
-      const segment = state.agentSegmentByThread[action.threadId] ?? 0;
-      const segmentedItemId = segment > 0 ? `${action.itemId}-seg-${segment}` : action.itemId;
+      const segmentedItemId = resolveLiveAssistantMessageId(
+        state,
+        action.threadId,
+        action.itemId,
+      );
       const list = [...(state.itemsByThread[action.threadId] ?? [])];
       let index = findAssistantMessageIndexById(list, segmentedItemId);
       if (index < 0) {
@@ -2253,9 +2289,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         return state;
       }
       const list = state.itemsByThread[action.threadId] ?? [];
-      const index = list.findIndex((entry) => entry.id === action.itemId);
+      const index = findReasoningIndexById(list, action.itemId);
       const base =
-        index >= 0 && list[index].kind === "reasoning"
+        index >= 0
           ? (list[index] as ConversationItem)
           : {
               id: action.itemId,
@@ -2287,9 +2323,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         return state;
       }
       const list = state.itemsByThread[action.threadId] ?? [];
-      const index = list.findIndex((entry) => entry.id === action.itemId);
+      const index = findReasoningIndexById(list, action.itemId);
       const base =
-        index >= 0 && list[index].kind === "reasoning"
+        index >= 0
           ? (list[index] as ConversationItem)
           : {
               id: action.itemId,
@@ -2338,9 +2374,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         return state;
       }
       const list = state.itemsByThread[action.threadId] ?? [];
-      const index = list.findIndex((entry) => entry.id === action.itemId);
+      const index = findReasoningIndexById(list, action.itemId);
       const base =
-        index >= 0 && list[index].kind === "reasoning"
+        index >= 0
           ? (list[index] as ConversationItem)
           : {
               id: action.itemId,

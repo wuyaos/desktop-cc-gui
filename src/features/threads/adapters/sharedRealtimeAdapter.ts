@@ -295,6 +295,36 @@ export function mapCommonRealtimeEvent(
         timestampMs,
       });
     }
+    if (
+      (method === "item/started" || method === "item/updated") &&
+      itemType === "agentMessage"
+    ) {
+      const text = asString(
+        rawItem.text ?? rawItem.content ?? rawItem.output_text ?? rawItem.outputText ?? "",
+      );
+      if (!text) {
+        return null;
+      }
+      return createEvent({
+        engine,
+        workspaceId,
+        threadId,
+        eventId: `${itemId}:${method.split("/")[1]}`,
+        item: {
+          id: itemId,
+          kind: "message",
+          role: "assistant",
+          text,
+        },
+        operation: "appendAgentMessageDelta",
+        sourceMethod: method,
+        delta: text,
+        rawItem,
+        rawUsage: Object.keys(rawUsage).length > 0 ? rawUsage : null,
+        turnId,
+        timestampMs,
+      });
+    }
     const converted = buildConversationItem(rawItem);
     if (!converted) {
       return null;

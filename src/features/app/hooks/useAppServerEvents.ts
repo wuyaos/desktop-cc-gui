@@ -132,6 +132,53 @@ function extractThreadIdFromParams(params: Record<string, unknown>): string {
   ).trim();
 }
 
+function extractAgentMessageDeltaPayload(
+  method: string,
+  params: Record<string, unknown>,
+): { threadId: string; itemId: string; delta: string } | null {
+  const isAgentDeltaMethod =
+    method === "item/agentMessage/delta" ||
+    method === "item/agentMessage/textDelta" ||
+    method === "item/agentMessage/text/delta";
+  if (!isAgentDeltaMethod) {
+    return null;
+  }
+
+  const turn = (params.turn as Record<string, unknown> | undefined) ?? {};
+  const itemObj = (params.item as Record<string, unknown> | undefined) ?? {};
+  const messageObj = (params.message as Record<string, unknown> | undefined) ?? {};
+  const threadId = extractThreadIdFromParams(params);
+  const itemId = asString(
+    params.itemId ??
+      params.item_id ??
+      itemObj.id ??
+      messageObj.id ??
+      turn.itemId ??
+      turn.item_id ??
+      turn.id ??
+      "",
+  ).trim();
+  const delta = asString(
+    params.delta ??
+      params.text ??
+      params.output_text ??
+      params.outputText ??
+      params.content ??
+      itemObj.delta ??
+      itemObj.text ??
+      itemObj.content ??
+      messageObj.delta ??
+      messageObj.text ??
+      messageObj.content ??
+      "",
+  );
+
+  if (!threadId || !itemId || !delta) {
+    return null;
+  }
+  return { threadId, itemId, delta };
+}
+
 function toNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -509,20 +556,15 @@ export function useAppServerEvents(
         return;
       }
 
-      if (method === "item/agentMessage/delta") {
-        const params = message.params as Record<string, unknown>;
-        const threadId = String(params.threadId ?? params.thread_id ?? "");
-        const itemId = String(params.itemId ?? params.item_id ?? "");
-        const delta = String(params.delta ?? "");
-        if (threadId && itemId && delta) {
-          threadAgentDeltaSeenRef.current[threadId] = true;
-          handlers.onAgentMessageDelta?.({
-            workspaceId: workspace_id,
-            threadId,
-            itemId,
-            delta,
-          });
-        }
+      const agentDeltaPayload = extractAgentMessageDeltaPayload(method, params);
+      if (agentDeltaPayload) {
+        threadAgentDeltaSeenRef.current[agentDeltaPayload.threadId] = true;
+        handlers.onAgentMessageDelta?.({
+          workspaceId: workspace_id,
+          threadId: agentDeltaPayload.threadId,
+          itemId: agentDeltaPayload.itemId,
+          delta: agentDeltaPayload.delta,
+        });
         return;
       }
 

@@ -516,6 +516,30 @@ describe("threadItems", () => {
     }
   });
 
+  it("upserts by id+kind and preserves entries with same id across kinds", () => {
+    const existingAssistant: ConversationItem = {
+      id: "shared-1",
+      kind: "message",
+      role: "assistant",
+      text: "assistant",
+    };
+    const incomingReasoning: ConversationItem = {
+      id: "shared-1",
+      kind: "reasoning",
+      summary: "",
+      content: "thinking",
+    };
+
+    const merged = upsertItem([existingAssistant], incomingReasoning);
+    expect(merged).toHaveLength(2);
+    expect(
+      merged.some((item) => item.kind === "message" && item.id === "shared-1"),
+    ).toBe(true);
+    expect(
+      merged.some((item) => item.kind === "reasoning" && item.id === "shared-1"),
+    ).toBe(true);
+  });
+
   it("ignores glob patterns when summarizing rg --files commands", () => {
     const items: ConversationItem[] = [
       {

@@ -405,6 +405,11 @@
   box-shadow: none;
 }
 
+.markdown-live-streaming {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .user-collapsible-block {
   display: flex;
   flex-direction: column;

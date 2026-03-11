@@ -102,6 +102,9 @@ export function useThreadItemEvents({
       }
       applyCollabThreadLinks(threadId, item);
       const itemType = asString(item?.type ?? "");
+      const agentMessageSnapshotText = asString(
+        item?.text ?? item?.content ?? item?.output_text ?? item?.outputText ?? "",
+      );
       if (itemType === "enteredReviewMode") {
         markReviewing(threadId, true);
       } else if (itemType === "exitedReviewMode") {
@@ -122,6 +125,21 @@ export function useThreadItemEvents({
       ].includes(itemType);
       if (shouldMarkProcessing && shouldIncrementAgentSegment && isToolItem) {
         dispatch({ type: "incrementAgentSegment", threadId });
+      }
+
+      if (itemType === "agentMessage") {
+        if (agentMessageSnapshotText) {
+          dispatch({
+            type: "appendAgentDelta",
+            workspaceId,
+            threadId,
+            itemId: asString(item?.id ?? ""),
+            delta: agentMessageSnapshotText,
+            hasCustomName: Boolean(getCustomName(workspaceId, threadId)),
+          });
+        }
+        safeMessageActivity();
+        return;
       }
 
       const converted = buildConversationItem(item);

@@ -197,6 +197,37 @@ describe("threadReducer", () => {
     expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe("Assistant note");
   });
 
+  it("merges claude live assistant chunks into one row even when item ids change mid-turn", () => {
+    const base: ThreadState = {
+      ...initialState,
+      activeTurnIdByThread: { "claude:thread-1": "turn-1" },
+    };
+    const first = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:thread-1",
+      itemId: "assistant-chunk-1",
+      delta: "高",
+      hasCustomName: false,
+    });
+    const second = threadReducer(first, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:thread-1",
+      itemId: "assistant-chunk-2",
+      delta: "高概率这是前端渲染问题。",
+      hasCustomName: false,
+    });
+
+    const messages = (second.itemsByThread["claude:thread-1"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.id).toBe("assistant-live:turn-1");
+    expect(messages[0]?.text).toBe("高概率这是前端渲染问题。");
+  });
+
   it("prefers cumulative snapshot delta when it matches compact text", () => {
     const first = threadReducer(initialState, {
       type: "appendAgentDelta",
@@ -884,6 +915,49 @@ describe("threadReducer", () => {
       expect(contentItem.summary).toBe("Short plan");
       expect(contentItem.content).toBe("More detail");
     }
+  });
+
+  it("keeps assistant message when reasoning deltas reuse the same item id", () => {
+    const withAssistant = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "shared-1",
+      delta: "正文起始",
+      hasCustomName: false,
+    });
+    const withReasoning = threadReducer(withAssistant, {
+      type: "appendReasoningContent",
+      threadId: "thread-1",
+      itemId: "shared-1",
+      delta: "思考片段",
+    });
+    const withAssistantContinue = threadReducer(withReasoning, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "shared-1",
+      delta: "继续输出",
+      hasCustomName: false,
+    });
+
+    const items = withAssistantContinue.itemsByThread["thread-1"] ?? [];
+    const assistant = items.find(
+      (item) => item.kind === "message" && item.id === "shared-1",
+    );
+    const reasoning = items.find(
+      (item) => item.kind === "reasoning" && item.id === "shared-1",
+    );
+
+    expect(assistant?.kind).toBe("message");
+    if (assistant?.kind === "message") {
+      expect(assistant.text).toBe("正文起始继续输出");
+    }
+    expect(reasoning?.kind).toBe("reasoning");
+    if (reasoning?.kind === "reasoning") {
+      expect(reasoning.content).toBe("思考片段");
+    }
+    expect(items.filter((item) => item.id === "shared-1")).toHaveLength(2);
   });
 
   it("ignores claude reasoning deltas when the thread has no active turn", () => {

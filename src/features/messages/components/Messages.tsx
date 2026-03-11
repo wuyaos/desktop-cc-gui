@@ -88,6 +88,7 @@ type WorkingIndicatorProps = {
 
 type MessageRowProps = {
   item: Extract<ConversationItem, { kind: "message" }>;
+  isStreaming?: boolean;
   activeEngine?: "claude" | "codex" | "gemini" | "opencode";
   activeCollaborationModeId?: string | null;
   enableCollaborationBadge?: boolean;
@@ -175,6 +176,7 @@ function areMessageRowPropsEqual(
 ) {
   return (
     areMessageItemsEqual(previous.item, next.item) &&
+    previous.isStreaming === next.isStreaming &&
     previous.activeEngine === next.activeEngine &&
     previous.enableCollaborationBadge === next.enableCollaborationBadge &&
     previous.presentationProfile === next.presentationProfile &&
@@ -277,6 +279,36 @@ function toConversationEngine(
     return engine;
   }
   return "codex";
+}
+
+function resolveRenderableItems({
+  legacyItems,
+  legacyThreadId,
+  legacyWorkspaceId,
+  conversationState,
+}: {
+  legacyItems: ConversationItem[];
+  legacyThreadId: string | null;
+  legacyWorkspaceId: string | null;
+  conversationState: ConversationState | null;
+}) {
+  if (!conversationState) {
+    return legacyItems;
+  }
+  const stateItems = conversationState.items;
+  const stateThreadId = conversationState.meta.threadId || null;
+  const stateWorkspaceId = conversationState.meta.workspaceId || null;
+  const isSameThread =
+    (legacyThreadId ?? null) === stateThreadId &&
+    (legacyWorkspaceId ?? null) === stateWorkspaceId;
+  const stateEngine = conversationState.meta.engine;
+  // Claude streaming path relies on the latest legacy items to avoid
+  // delayed body flush in the UI. Keep other engines on conversation state
+  // to preserve their existing markdown rendering behavior.
+  if (isSameThread && stateEngine === "claude") {
+    return legacyItems;
+  }
+  return stateItems;
 }
 
 function sanitizeReasoningTitle(title: string) {
@@ -1138,6 +1170,7 @@ const WorkingIndicator = memo(function WorkingIndicator({
 
 const MessageRow = memo(function MessageRow({
   item,
+  isStreaming = false,
   activeEngine = "claude",
   enableCollaborationBadge = false,
   presentationProfile = null,
@@ -1193,6 +1226,9 @@ const MessageRow = memo(function MessageRow({
     item.role === "assistant" && useCodexCanvasMarkdown
       ? "markdown markdown-codex-canvas"
       : "markdown";
+  const resolvedMarkdownClassName = isStreaming
+    ? `${markdownClassName} markdown-live-streaming`
+    : markdownClassName;
   const imageItems = useMemo(() => {
     if (!item.images || item.images.length === 0) {
       return [];
@@ -1255,7 +1291,7 @@ const MessageRow = memo(function MessageRow({
           ) : (
             <Markdown
               value={displayText}
-              className={markdownClassName}
+              className={resolvedMarkdownClassName}
               codeBlockStyle="message"
               codeBlockCopyUseModifier={codeBlockCopyUseModifier}
               onOpenFileLink={onOpenFileLink}
@@ -1482,7 +1518,16 @@ export const Messages = memo(function Messages({
     ],
   );
   const effectiveState = conversationState ?? fallbackConversationState;
-  const items = effectiveState.items;
+  const items = useMemo(
+    () =>
+      resolveRenderableItems({
+        legacyItems,
+        legacyThreadId,
+        legacyWorkspaceId,
+        conversationState,
+      }),
+    [conversationState, legacyItems, legacyThreadId, legacyWorkspaceId],
+  );
   const plan = effectiveState.plan;
   const userInputRequests = effectiveState.userInputQueue;
   const workspaceId = effectiveState.meta.workspaceId || legacyWorkspaceId;
@@ -1835,6 +1880,16 @@ export const Messages = memo(function Messages({
     return null;
   }, [activeEngine, effectiveItems, presentationProfile]);
 
+  const latestAssistantMessageId = useMemo(() => {
+    for (let index = effectiveItems.length - 1; index > lastUserMessageIndex; index -= 1) {
+      const item = effectiveItems[index];
+      if (item.kind === "message" && item.role === "assistant") {
+        return item.id;
+      }
+    }
+    return null;
+  }, [effectiveItems, lastUserMessageIndex]);
+
   const waitingForFirstChunk = useMemo(() => {
     if (!isThinking || effectiveItems.length === 0) {
       return false;
@@ -2146,6 +2201,7 @@ export const Messages = memo(function Messages({
 
   const renderSingleItem = (item: ConversationItem) => {
     if (item.kind === "message") {
+      const itemRenderKey = `message:${item.id}`;
       const isCopied = copiedMessageId === item.id;
       const bindMessageNode = (node: HTMLDivElement | null) => {
         if (item.role === "user" && node) {
@@ -2155,9 +2211,15 @@ export const Messages = memo(function Messages({
         messageNodeByIdRef.current.delete(item.id);
       };
       return (
-        <div key={item.id} ref={bindMessageNode} data-message-anchor-id={item.id}>
+        <div key={itemRenderKey} ref={bindMessageNode} data-message-anchor-id={item.id}>
           <MessageRow
             item={item}
+            isStreaming={
+              activeEngine === "claude" &&
+              isThinking &&
+              item.role === "assistant" &&
+              item.id === latestAssistantMessageId
+            }
             activeEngine={activeEngine}
             activeCollaborationModeId={activeCollaborationModeId}
             enableCollaborationBadge={activeEngine === "codex"}
@@ -2172,6 +2234,7 @@ export const Messages = memo(function Messages({
       );
     }
     if (item.kind === "reasoning") {
+      const itemRenderKey = `reasoning:${item.id}`;
       const isExpanded = expandedItems.has(item.id);
       const parsed =
         reasoningMetaById.get(item.id) ??
@@ -2180,7 +2243,7 @@ export const Messages = memo(function Messages({
         isThinking && latestReasoningId === item.id;
       return (
         <ReasoningRow
-          key={item.id}
+          key={itemRenderKey}
           item={item}
           parsed={parsed}
           isExpanded={isExpanded}
@@ -2194,7 +2257,7 @@ export const Messages = memo(function Messages({
     if (item.kind === "review") {
       return (
         <ReviewRow
-          key={item.id}
+          key={`review:${item.id}`}
           item={item}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
@@ -2202,13 +2265,13 @@ export const Messages = memo(function Messages({
       );
     }
     if (item.kind === "diff") {
-      return <DiffRow key={item.id} item={item} />;
+      return <DiffRow key={`diff:${item.id}`} item={item} />;
     }
     if (item.kind === "tool") {
       const isExpanded = expandedItems.has(item.id);
       return (
         <ToolBlockRenderer
-          key={item.id}
+          key={`tool:${item.id}`}
           item={item}
           isExpanded={isExpanded}
           onToggle={toggleExpanded}
@@ -2222,7 +2285,7 @@ export const Messages = memo(function Messages({
       const isExpanded = expandedItems.has(item.id);
       return (
         <ExploreRow
-          key={item.id}
+          key={`explore:${item.id}`}
           item={item}
           isExpanded={isExpanded}
           onToggle={toggleExpanded}

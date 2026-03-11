@@ -46,6 +46,28 @@ describe("realtime adapters", () => {
     expect(event?.delta).toBe("checking files...");
   });
 
+  it("maps claude item/updated agentMessage snapshot to assistant delta event", () => {
+    const event = claudeRealtimeAdapter.mapEvent({
+      workspaceId: "ws-2",
+      message: {
+        method: "item/updated",
+        params: {
+          threadId: "claude:session-1",
+          item: {
+            id: "assistant-1",
+            type: "agentMessage",
+            text: "streaming body",
+          },
+        },
+      },
+    });
+    expect(event).toBeTruthy();
+    expect(event?.engine).toBe("claude");
+    expect(event?.operation).toBe("appendAgentMessageDelta");
+    expect(event?.item.kind).toBe("message");
+    expect(event?.delta).toBe("streaming body");
+  });
+
   it("maps fileChange outputDelta to normalized tool output delta event", () => {
     const event = codexRealtimeAdapter.mapEvent({
       workspaceId: "ws-file",

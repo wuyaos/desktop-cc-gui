@@ -1540,7 +1540,9 @@ export function prepareThreadItems(items: ConversationItem[]) {
 }
 
 export function upsertItem(list: ConversationItem[], item: ConversationItem) {
-  const index = list.findIndex((entry) => entry.id === item.id);
+  const index = list.findIndex(
+    (entry) => entry.id === item.id && entry.kind === item.kind,
+  );
   if (index === -1) {
     return [...list, item];
   }

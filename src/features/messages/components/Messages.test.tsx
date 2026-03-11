@@ -534,6 +534,149 @@ describe("Messages", () => {
     expect(screen.queryByText("Legacy step")).toBeNull();
   });
 
+  it("prefers conversationState items for codex when state and legacy point to the same thread", () => {
+    const legacyItems: ConversationItem[] = [
+      {
+        id: "assistant-legacy-codex-1",
+        kind: "message",
+        role: "assistant",
+        text: "LEGACY-CODEX",
+      },
+    ];
+    const stateItems: ConversationItem[] = [
+      {
+        id: "assistant-state-codex-1",
+        kind: "message",
+        role: "assistant",
+        text: "STATE-CODEX",
+      },
+    ];
+
+    render(
+      <Messages
+        items={legacyItems}
+        threadId="codex:thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        conversationState={{
+          items: stateItems,
+          plan: null,
+          userInputQueue: [],
+          meta: {
+            workspaceId: "ws-1",
+            threadId: "codex:thread-1",
+            engine: "codex",
+            activeTurnId: null,
+            isThinking: false,
+            heartbeatPulse: null,
+            historyRestoredAtMs: null,
+          },
+        }}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("STATE-CODEX")).toBeTruthy();
+    expect(screen.queryByText("LEGACY-CODEX")).toBeNull();
+  });
+
+  it("uses conversationState engine as routing source when activeEngine prop is omitted", () => {
+    const legacyItems: ConversationItem[] = [
+      {
+        id: "assistant-legacy-codex-2",
+        kind: "message",
+        role: "assistant",
+        text: "LEGACY-CODEX-DEFAULT",
+      },
+    ];
+    const stateItems: ConversationItem[] = [
+      {
+        id: "assistant-state-codex-2",
+        kind: "message",
+        role: "assistant",
+        text: "STATE-CODEX-DEFAULT",
+      },
+    ];
+
+    render(
+      <Messages
+        items={legacyItems}
+        threadId="codex:thread-2"
+        workspaceId="ws-1"
+        isThinking={false}
+        conversationState={{
+          items: stateItems,
+          plan: null,
+          userInputQueue: [],
+          meta: {
+            workspaceId: "ws-1",
+            threadId: "codex:thread-2",
+            engine: "codex",
+            activeTurnId: null,
+            isThinking: false,
+            heartbeatPulse: null,
+            historyRestoredAtMs: null,
+          },
+        }}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("STATE-CODEX-DEFAULT")).toBeTruthy();
+    expect(screen.queryByText("LEGACY-CODEX-DEFAULT")).toBeNull();
+  });
+
+  it("prefers legacy items for claude when state and legacy point to the same thread", () => {
+    const legacyItems: ConversationItem[] = [
+      {
+        id: "assistant-legacy-claude-1",
+        kind: "message",
+        role: "assistant",
+        text: "LEGACY-CLAUDE",
+      },
+    ];
+    const stateItems: ConversationItem[] = [
+      {
+        id: "assistant-state-claude-1",
+        kind: "message",
+        role: "assistant",
+        text: "STATE-CLAUDE",
+      },
+    ];
+
+    render(
+      <Messages
+        items={legacyItems}
+        threadId="claude:thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        conversationState={{
+          items: stateItems,
+          plan: null,
+          userInputQueue: [],
+          meta: {
+            workspaceId: "ws-1",
+            threadId: "claude:thread-1",
+            engine: "claude",
+            activeTurnId: null,
+            isThinking: false,
+            heartbeatPulse: null,
+            historyRestoredAtMs: null,
+          },
+        }}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("LEGACY-CLAUDE")).toBeTruthy();
+    expect(screen.queryByText("STATE-CLAUDE")).toBeNull();
+  });
+
   it("hides TodoWrite tool blocks from chat stream", () => {
     const items: ConversationItem[] = [
       {
@@ -1192,6 +1335,40 @@ describe("Messages", () => {
         "Step 1 complete",
       );
     });
+  });
+
+  it("renders the latest claude assistant row as markdown while streaming", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-claude-live-1",
+        kind: "message",
+        role: "user",
+        text: "帮我分析这个问题",
+      },
+      {
+        id: "assistant-live:turn-1",
+        kind: "message",
+        role: "assistant",
+        text: "高概率这是前端渲染问题，正文流已经到了。",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="claude:thread-1"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const markdownParagraph = container.querySelector(".message.assistant .markdown p");
+    expect(markdownParagraph?.textContent ?? "").toContain("高概率这是前端渲染问题");
+    expect(container.querySelector(".message.assistant .markdown-live-streaming")).toBeTruthy();
   });
 
   it("freezes assistant content updates while text is selected", () => {
@@ -2373,5 +2550,46 @@ describe("Messages", () => {
       expect(exploreRows.length).toBe(3);
     });
     expect(screen.queryByText("5 tool calls")).toBeNull();
+  });
+
+  it("avoids React key collisions when reasoning and message share the same item id", () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const items: ConversationItem[] = [
+      {
+        id: "shared-item-1",
+        kind: "reasoning",
+        summary: "思考中",
+        content: "先拆解问题。",
+      },
+      {
+        id: "shared-item-1",
+        kind: "message",
+        role: "assistant",
+        text: "这是正文增量。",
+      },
+    ];
+
+    render(
+      <Messages
+        items={items}
+        threadId="claude:session-1"
+        workspaceId="ws-1"
+        isThinking={true}
+        openTargets={[]}
+        selectedOpenAppId=""
+        activeEngine="claude"
+      />,
+    );
+
+    expect(screen.getByText("这是正文增量。")).toBeTruthy();
+    expect(screen.getByText("先拆解问题。")).toBeTruthy();
+    const duplicateKeyWarnings = consoleErrorSpy.mock.calls.filter(([firstArg]) =>
+      typeof firstArg === "string" &&
+      firstArg.includes("Encountered two children with the same key"),
+    );
+    expect(duplicateKeyWarnings).toHaveLength(0);
+    consoleErrorSpy.mockRestore();
   });
 });
