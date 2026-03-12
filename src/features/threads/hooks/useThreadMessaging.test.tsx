@@ -20,6 +20,11 @@ import {
   startReview as startReviewService,
 } from "../../../services/tauri";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
+import { pushErrorToast } from "../../../services/toasts";
+
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: vi.fn(),
+}));
 
 vi.mock("../../../services/tauri", () => ({
   sendUserMessage: vi.fn(),
@@ -130,12 +135,20 @@ describe("useThreadMessaging", () => {
   ) {
     const activeThreadId = overrides.activeThreadId ?? "thread-1";
     const ensuredThreadId = overrides.ensuredThreadId ?? activeThreadId;
+    const dispatch = overrides.dispatch ?? vi.fn();
+    const markProcessing = vi.fn();
+    const markReviewing = vi.fn();
+    const setActiveTurnId = vi.fn();
+    const recordThreadActivity = vi.fn();
+    const safeMessageActivity = vi.fn();
+    const pushThreadErrorMessage = vi.fn();
+    const onDebug = vi.fn();
 
     const startThreadForWorkspace =
       overrides.startThreadForWorkspace ??
       vi.fn(async () => ensuredThreadId);
 
-    return renderHook(() =>
+    const hook = renderHook(() =>
       useThreadMessaging({
         activeWorkspace: overrides.workspace ?? workspace,
         activeThreadId,
@@ -152,25 +165,36 @@ describe("useThreadMessaging", () => {
         rateLimitsByWorkspace: {},
         pendingInterruptsRef: { current: new Set<string>() },
         interruptedThreadsRef: { current: new Set<string>() },
-        dispatch: overrides.dispatch ?? vi.fn(),
+        dispatch,
         getCustomName: () => undefined,
         getThreadEngine: (_workspaceId, threadId) =>
           overrides.threadEngineById?.[threadId] ?? undefined,
-        markProcessing: vi.fn(),
-        markReviewing: vi.fn(),
-        setActiveTurnId: vi.fn(),
-        recordThreadActivity: vi.fn(),
-        safeMessageActivity: vi.fn(),
-        pushThreadErrorMessage: vi.fn(),
+        markProcessing,
+        markReviewing,
+        setActiveTurnId,
+        recordThreadActivity,
+        safeMessageActivity,
+        pushThreadErrorMessage,
         ensureThreadForActiveWorkspace: async () => ensuredThreadId,
         ensureThreadForWorkspace: async () => ensuredThreadId,
         refreshThread: async () => null,
         forkThreadForWorkspace: async () => null,
         updateThreadParent: vi.fn(),
         startThreadForWorkspace,
-        onDebug: vi.fn(),
+        onDebug,
       }),
     );
+    return {
+      ...hook,
+      dispatch,
+      markProcessing,
+      markReviewing,
+      setActiveTurnId,
+      recordThreadActivity,
+      safeMessageActivity,
+      pushThreadErrorMessage,
+      onDebug,
+    };
   }
 
   it("routes opencode thread through engineSendMessage", async () => {
@@ -753,6 +777,65 @@ describe("useThreadMessaging", () => {
     expect(optimisticCall).toBeDefined();
     const optimisticAction = optimisticCall?.[0] as { item?: { id?: string } };
     expect(optimisticAction.item?.id).toMatch(/^optimistic-user-/);
+  });
+
+  it("releases codex processing state when first packet timeout is recoverable", async () => {
+    vi.mocked(sendUserMessage).mockRejectedValueOnce(
+      new Error(
+        "FIRST_PACKET_TIMEOUT:35:Timed out waiting for initial response. Network, proxy, or upstream service load may be causing delay. Please retry.",
+      ),
+    );
+    const { result, markProcessing, setActiveTurnId, pushThreadErrorMessage } =
+      makeHook("codex");
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "hello codex",
+      );
+    });
+
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
+    expect(pushThreadErrorMessage).not.toHaveBeenCalled();
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "common.warning",
+        message: "threads.firstPacketTimeout",
+      }),
+    );
+  });
+
+  it("releases codex processing state when first packet timeout comes back as rpc error", async () => {
+    vi.mocked(sendUserMessage).mockResolvedValueOnce({
+      error: {
+        message:
+          "FIRST_PACKET_TIMEOUT:20:Timed out waiting for initial response. Network, proxy, or upstream service load may be causing delay. Please retry.",
+      },
+    });
+    const { result, markProcessing, setActiveTurnId, pushThreadErrorMessage } =
+      makeHook("codex");
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "hello codex",
+      );
+    });
+
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", true);
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
+    expect(pushThreadErrorMessage).not.toHaveBeenCalled();
+    expect(pushErrorToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "common.warning",
+        message: "threads.firstPacketTimeout",
+      }),
+    );
   });
 
   it("passes custom spec root through codex send when configured", async () => {

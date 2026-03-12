@@ -71,8 +71,8 @@ describe("GitHistoryWorktreePanel", () => {
     render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" />);
 
     await waitFor(() => {
-      expect(screen.getByText("Staged (1)")).toBeTruthy();
-      expect(screen.getByText("Unstaged (1)")).toBeTruthy();
+      expect(screen.getByLabelText("Staged (1)")).toBeTruthy();
+      expect(screen.getByLabelText("Unstaged (1)")).toBeTruthy();
     });
 
     expect(document.querySelector(".git-history-worktree-section.git-filetree-section")).toBeTruthy();
@@ -106,18 +106,38 @@ describe("GitHistoryWorktreePanel", () => {
     render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" />);
 
     await waitFor(() => {
-      expect(screen.getByText("Staged (1)")).toBeTruthy();
+      expect(screen.getAllByLabelText("Staged (1)").length).toBeGreaterThan(0);
     });
 
     expect(screen.queryByText("Unstaged (0)")).toBeNull();
     expect(screen.queryByText("No changes")).toBeNull();
   });
 
+  it("renders compact summary bar when only one section is visible", async () => {
+    mockGetGitStatus.mockResolvedValue({
+      branchName: "main",
+      files: [{ path: "src/staged.ts", status: "M", additions: 2, deletions: 1 }],
+      stagedFiles: [{ path: "src/staged.ts", status: "M", additions: 2, deletions: 1 }],
+      unstagedFiles: [],
+      totalAdditions: 2,
+      totalDeletions: 1,
+    });
+
+    render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" commitSectionCollapsed />);
+
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-worktree-summary-bar")).toBeTruthy();
+    });
+
+    expect(screen.getByText("main")).toBeTruthy();
+    expect(screen.getAllByLabelText("Staged (1)").length).toBeGreaterThan(0);
+  });
+
   it("hides commit box when commit section is collapsed", async () => {
     render(<GitHistoryWorktreePanel workspaceId="w1" listView="tree" commitSectionCollapsed />);
 
     await waitFor(() => {
-      expect(screen.getByText("Staged (1)")).toBeTruthy();
+      expect(screen.getByLabelText("Staged (1)")).toBeTruthy();
     });
 
     expect(screen.queryByPlaceholderText("Commit message")).toBeNull();

@@ -89,6 +89,7 @@ const markdownExtensions = new Set(["md", "mdx"]);
 const NAVIGATION_REQUEST_TIMEOUT_MS = 8_000;
 const CODE_INTEL_CACHE_TTL_MS = 3_000;
 const CODE_INTEL_REPEAT_DEBOUNCE_MS = 120;
+type EditorTheme = "light" | "dark";
 
 function isMarkdownPath(path: string) {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
@@ -127,6 +128,21 @@ function isImagePath(path: string) {
 function isBinaryPath(path: string) {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   return binaryExtensions.has(ext);
+}
+
+function resolveEditorTheme(): EditorTheme {
+  if (typeof document === "undefined") {
+    return "dark";
+  }
+  const dataTheme = document.documentElement.dataset.theme;
+  if (dataTheme === "light") return "light";
+  if (dataTheme === "dark" || dataTheme === "dim") return "dark";
+  if (typeof window !== "undefined" && window.matchMedia) {
+    return window.matchMedia("(prefers-color-scheme: light)").matches
+      ? "light"
+      : "dark";
+  }
+  return "dark";
 }
 
 function formatFileSize(bytes: number): string {
@@ -557,8 +573,10 @@ export function FileViewPanel({
   const isMarkdown = useMemo(() => isMarkdownPath(filePath), [filePath]);
   const isImage = useMemo(() => isImagePath(filePath), [filePath]);
   const isBinary = useMemo(() => isBinaryPath(filePath), [filePath]);
-  const [mode, setMode] = useState<"preview" | "edit">(initialMode);
-  const [mdViewMode, setMdViewMode] = useState<"rendered" | "source">("rendered");
+  const [mode, setMode] = useState<"preview" | "edit">(
+    () => (isMarkdown ? "edit" : initialMode),
+  );
+  const [editorTheme, setEditorTheme] = useState<EditorTheme>(() => resolveEditorTheme());
   const [content, setContent] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -756,8 +774,7 @@ export function FileViewPanel({
     pendingOpenFindPanelRef.current = false;
     recentDefinitionTriggerRef.current = null;
     recentReferencesTriggerRef.current = null;
-    setMode(initialMode);
-    setMdViewMode("rendered");
+    setMode(isMarkdown ? "edit" : initialMode);
     onActiveFileLineRangeChange?.(null);
     lastReportedLineRangeRef.current = "";
     setIsDefinitionLoading(false);
@@ -765,7 +782,46 @@ export function FileViewPanel({
     setNavigationError(null);
     setDefinitionCandidates([]);
     setReferenceResults(null);
-  }, [filePath, initialMode, onActiveFileLineRangeChange]);
+  }, [filePath, initialMode, isMarkdown, onActiveFileLineRangeChange]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
+      return;
+    }
+    const updateTheme = () => {
+      setEditorTheme((prev) => {
+        const next = resolveEditorTheme();
+        return prev === next ? prev : next;
+      });
+    };
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.attributeName === "data-theme") {
+          updateTheme();
+          return;
+        }
+      }
+    });
+    observer.observe(document.documentElement, { attributes: true });
+    const media =
+      typeof window !== "undefined" && window.matchMedia
+        ? window.matchMedia("(prefers-color-scheme: light)")
+        : null;
+    const handleMediaChange = () => updateTheme();
+    if (media?.addEventListener) {
+      media.addEventListener("change", handleMediaChange);
+    } else if (media?.addListener) {
+      media.addListener(handleMediaChange);
+    }
+    return () => {
+      observer.disconnect();
+      if (media?.removeEventListener) {
+        media.removeEventListener("change", handleMediaChange);
+      } else if (media?.removeListener) {
+        media.removeListener(handleMediaChange);
+      }
+    };
+  }, []);
 
   // Save handler
   const handleSave = useCallback(async () => {
@@ -1492,26 +1548,6 @@ export function FileViewPanel({
           <>
             {mode === "preview" ? (
               <div className="fvp-action-group fvp-preview-tools" role="group">
-                {isMarkdown && (
-                  <>
-                    <button
-                      type="button"
-                      className={`fvp-action-btn ${mdViewMode === "rendered" ? "is-active" : ""}`}
-                      onClick={() => setMdViewMode("rendered")}
-                    >
-                      <Eye size={14} aria-hidden />
-                      <span>{t("files.preview")}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`fvp-action-btn ${mdViewMode === "source" ? "is-active" : ""}`}
-                      onClick={() => setMdViewMode("source")}
-                    >
-                      <Code size={14} aria-hidden />
-                      <span>{t("files.source")}</span>
-                    </button>
-                  </>
-                )}
                 <button
                   type="button"
                   className="fvp-action-btn"
@@ -1678,56 +1714,6 @@ export function FileViewPanel({
 
     // Edit mode
     if (mode === "edit") {
-      if (isMarkdown) {
-        // Split pane: editor on left, preview on right
-        return (
-          <div className="fvp-split">
-            <div className="fvp-split-editor">
-              <CodeMirror
-                ref={cmRef}
-                value={content}
-                onChange={setContent}
-                onUpdate={(update) => {
-                  if (!update.selectionSet) {
-                    return;
-                  }
-                  const mainSelection = update.state.selection.main;
-                  const from = Math.min(mainSelection.from, mainSelection.to);
-                  const to = Math.max(mainSelection.from, mainSelection.to);
-                  const startLine = update.state.doc.lineAt(from).number;
-                  const endLine = update.state.doc.lineAt(to).number;
-                  const rangeKey = `${startLine}-${endLine}`;
-                  if (rangeKey === lastReportedLineRangeRef.current) {
-                    return;
-                  }
-                  lastReportedLineRangeRef.current = rangeKey;
-                  onActiveFileLineRangeChange?.({ startLine, endLine });
-                }}
-                extensions={editorExtensions}
-                theme="dark"
-                className="fvp-cm"
-                basicSetup={{
-                  lineNumbers: true,
-                  foldGutter: true,
-                  bracketMatching: true,
-                  closeBrackets: true,
-                  highlightActiveLine: true,
-                  indentOnInput: true,
-                  tabSize: 2,
-                }}
-              />
-            </div>
-            <div className="fvp-split-divider" />
-            <div className="fvp-split-preview">
-              <Markdown
-                value={content}
-                className="fvp-markdown"
-                codeBlockStyle="message"
-              />
-            </div>
-          </div>
-        );
-      }
       // Code edit: CodeMirror with syntax highlighting
       return (
         <div className="fvp-editor">
@@ -1752,7 +1738,7 @@ export function FileViewPanel({
               onActiveFileLineRangeChange?.({ startLine, endLine });
             }}
             extensions={editorExtensions}
-            theme="dark"
+            theme={editorTheme}
             className="fvp-cm"
             basicSetup={{
               lineNumbers: true,
@@ -1769,7 +1755,7 @@ export function FileViewPanel({
     }
 
     // Preview mode: Markdown rendered
-    if (isMarkdown && mdViewMode === "rendered") {
+    if (isMarkdown) {
       return (
         <div className="fvp-preview-scroll">
           <Markdown

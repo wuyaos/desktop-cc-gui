@@ -1900,10 +1900,11 @@ mod tests {
             .collect();
 
         assert!(args.windows(2).any(|window| {
-            window[0] == "--session-id"
-                && window[1] == "11111111-1111-4111-8111-111111111111"
+            window[0] == "--session-id" && window[1] == "11111111-1111-4111-8111-111111111111"
         }));
-        assert!(!args.iter().any(|arg| arg == "--continue" || arg == "--resume"));
+        assert!(!args
+            .iter()
+            .any(|arg| arg == "--continue" || arg == "--resume"));
     }
 
     #[test]
@@ -1926,8 +1927,7 @@ mod tests {
             .collect();
 
         assert!(args.windows(2).any(|window| {
-            window[0] == "--resume"
-                && window[1] == "22222222-2222-4222-8222-222222222222"
+            window[0] == "--resume" && window[1] == "22222222-2222-4222-8222-222222222222"
         }));
         assert!(!args.iter().any(|arg| arg == "--session-id"));
     }

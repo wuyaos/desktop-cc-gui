@@ -55,6 +55,8 @@ import {
   RotateCcw,
   Info,
   Check,
+  Wifi,
+  Save,
 } from "lucide-react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import {
@@ -116,6 +118,7 @@ import { ModelMappingSettings } from "../../models/components/ModelMappingSettin
 import { PlaceholderSection } from "./PlaceholderSection";
 import { CommitSection } from "./CommitSection";
 import { PromptSection } from "./PromptSection";
+import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import { UsageSection } from "./UsageSection";
 import { McpSection } from "./McpSection";
 import { SkillsSection } from "./SkillsSection";
@@ -132,6 +135,7 @@ import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
 import MoreHorizontalIcon from "lucide-react/dist/esm/icons/more-horizontal";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
 import Users from "lucide-react/dist/esm/icons/users";
+import { pushErrorToast } from "../../../services/toasts";
 import {
   isHistoryCompletionEnabled,
   setHistoryCompletionEnabled,
@@ -140,7 +144,8 @@ import {
 // Feature flags to show/hide settings sidebar entries
 const SHOW_DICTATION_ENTRY = false;
 const SHOW_GIT_ENTRY = false;
-const SHOW_CODEX_AND_EXPERIMENTAL = false;
+const SHOW_CODEX_ENTRY = false;
+const SHOW_EXPERIMENTAL_ENTRY = false;
 const SHOW_COMMIT_ENTRY = false;
 const SHOW_COMPOSER_ENTRY = false;
 const SHOW_SHORTCUTS_ENTRY = false;
@@ -205,6 +210,13 @@ const COMPOSER_PRESET_CONFIGS: Record<ComposerPreset, ComposerPresetSettings> = 
     composerCodeBlockCopyUseModifier: false,
   },
 };
+
+type InlineNoticeState =
+  | {
+      kind: "success" | "error";
+      message: string;
+    }
+  | null;
 
 const normalizeOverrideValue = (value: string): string | null => {
   const trimmed = value.trim();
@@ -511,6 +523,15 @@ export function SettingsView({
   const [historyCompletionEnabled, setHistoryCompletionEnabledState] = useState(
     () => isHistoryCompletionEnabled(),
   );
+  const [systemProxyEnabledDraft, setSystemProxyEnabledDraft] = useState(
+    appSettings.systemProxyEnabled ?? false,
+  );
+  const [systemProxyUrlDraft, setSystemProxyUrlDraft] = useState(
+    appSettings.systemProxyUrl ?? "",
+  );
+  const [systemProxyError, setSystemProxyError] = useState<string | null>(null);
+  const [systemProxyNotice, setSystemProxyNotice] = useState<InlineNoticeState>(null);
+  const [systemProxySaving, setSystemProxySaving] = useState(false);
   const handleHistoryCompletionToggle = useCallback(() => {
     const next = !historyCompletionEnabled;
     setHistoryCompletionEnabledState(next);
@@ -802,6 +823,131 @@ export function SettingsView({
     selectedSettingsWorkspace,
     sessionWorkspaceOptions,
   ]);
+
+  useEffect(() => {
+    setSystemProxyEnabledDraft(appSettings.systemProxyEnabled ?? false);
+    setSystemProxyUrlDraft(appSettings.systemProxyUrl ?? "");
+    setSystemProxyError(null);
+  }, [appSettings.systemProxyEnabled, appSettings.systemProxyUrl]);
+
+  useEffect(() => {
+    if (!systemProxyNotice) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setSystemProxyNotice(null);
+    }, 2600);
+    return () => window.clearTimeout(timer);
+  }, [systemProxyNotice]);
+
+  const updateSystemProxySettings = useCallback(async (
+    nextEnabled: boolean,
+    nextProxyUrl: string,
+    successMessage: string,
+    rollbackDraft: {
+      enabled: boolean;
+      proxyUrl: string;
+    },
+  ) => {
+    const trimmedProxyUrl = nextProxyUrl.trim();
+    if (nextEnabled && !trimmedProxyUrl) {
+      const message = t("settings.behaviorProxyRequired");
+      setSystemProxyEnabledDraft(rollbackDraft.enabled);
+      setSystemProxyUrlDraft(rollbackDraft.proxyUrl);
+      setSystemProxyError(message);
+      setSystemProxyNotice(null);
+      return false;
+    }
+
+    setSystemProxySaving(true);
+    setSystemProxyError(null);
+    setSystemProxyNotice(null);
+    try {
+      await onUpdateAppSettings({
+        ...appSettings,
+        systemProxyEnabled: nextEnabled,
+        systemProxyUrl: trimmedProxyUrl || null,
+      });
+      setSystemProxyNotice({
+        kind: "success",
+        message: successMessage,
+      });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setSystemProxyEnabledDraft(rollbackDraft.enabled);
+      setSystemProxyUrlDraft(rollbackDraft.proxyUrl);
+      setSystemProxyError(message);
+      setSystemProxyNotice(null);
+      pushErrorToast({
+        title: t("common.error"),
+        message,
+      });
+      return false;
+    } finally {
+      setSystemProxySaving(false);
+    }
+  }, [
+    appSettings,
+    onUpdateAppSettings,
+    t,
+  ]);
+
+  const handleSaveSystemProxy = useCallback(async () => {
+    await updateSystemProxySettings(
+      systemProxyEnabledDraft,
+      systemProxyUrlDraft,
+      t("settings.behaviorProxySaved"),
+      {
+        enabled: appSettings.systemProxyEnabled ?? false,
+        proxyUrl: appSettings.systemProxyUrl ?? "",
+      },
+    );
+  }, [
+    appSettings.systemProxyEnabled,
+    appSettings.systemProxyUrl,
+    systemProxyEnabledDraft,
+    systemProxyUrlDraft,
+    t,
+    updateSystemProxySettings,
+  ]);
+
+  const handleToggleSystemProxy = useCallback((checked: boolean) => {
+    if (systemProxySaving) {
+      return;
+    }
+    const rollbackDraft = {
+      enabled: appSettings.systemProxyEnabled ?? false,
+      proxyUrl: appSettings.systemProxyUrl ?? "",
+    };
+    const nextProxyUrl = checked
+      ? systemProxyUrlDraft
+      : (systemProxyUrlDraft.trim() || rollbackDraft.proxyUrl);
+
+    setSystemProxyEnabledDraft(checked);
+    setSystemProxyError(null);
+    setSystemProxyNotice(null);
+
+    void updateSystemProxySettings(
+      checked,
+      nextProxyUrl,
+      checked
+        ? t("settings.behaviorProxyEnabledSuccess")
+        : t("settings.behaviorProxyDisabledSuccess"),
+      rollbackDraft,
+    );
+  }, [
+    appSettings.systemProxyEnabled,
+    appSettings.systemProxyUrl,
+    systemProxySaving,
+    systemProxyUrlDraft,
+    t,
+    updateSystemProxySettings,
+  ]);
+
+  const systemProxyDirty =
+    (appSettings.systemProxyEnabled ?? false) !== systemProxyEnabledDraft ||
+    (appSettings.systemProxyUrl ?? "") !== systemProxyUrlDraft;
 
   useEffect(() => {
     setCodexPathDraft(appSettings.codexBin ?? "");
@@ -1734,17 +1880,19 @@ export function SettingsView({
               <MoreHorizontalIcon aria-hidden />
               {!sidebarCollapsed && t("settings.sidebarOther")}
             </button>
-            {SHOW_CODEX_AND_EXPERIMENTAL && (
+            {SHOW_CODEX_ENTRY && (
+              <button
+                type="button"
+                className={`settings-nav ${activeSection === "codex" ? "active" : ""}`}
+                onClick={() => setActiveSection("codex")}
+                title={sidebarCollapsed ? t("settings.sidebarCodex") : ""}
+              >
+                <TerminalSquare aria-hidden />
+                {!sidebarCollapsed && t("settings.sidebarCodex")}
+              </button>
+            )}
+            {SHOW_EXPERIMENTAL_ENTRY && (
               <>
-                <button
-                  type="button"
-                  className={`settings-nav ${activeSection === "codex" ? "active" : ""}`}
-                  onClick={() => setActiveSection("codex")}
-                  title={sidebarCollapsed ? t("settings.sidebarCodex") : ""}
-                >
-                  <TerminalSquare aria-hidden />
-                  {!sidebarCollapsed && t("settings.sidebarCodex")}
-                </button>
                 <button
                   type="button"
                   className={`settings-nav ${activeSection === "experimental" ? "active" : ""}`}
@@ -2191,6 +2339,98 @@ export function SettingsView({
                           />
                         </CardAction>
                       </CardHeader>
+                    </Card>
+                    <Card
+                      className={`settings-basic-group-card settings-basic-shadcn-card settings-basic-proxy-card${
+                        systemProxyEnabledDraft ? " is-enabled" : ""
+                      }`}
+                    >
+                      <CardHeader className="settings-basic-sounds-card-header settings-proxy-card-header">
+                        <div className="settings-card-switch-meta">
+                          <CardTitle className="settings-subsection-title">
+                            <span className="settings-proxy-card-title">
+                              <Wifi size={16} aria-hidden />
+                              {t("settings.behaviorProxyTitle")}
+                              {systemProxyEnabledDraft && (
+                                <ProxyStatusBadge
+                                  proxyUrl={systemProxyUrlDraft}
+                                  label={t("messages.proxyBadge")}
+                                  variant="compact"
+                                  className="settings-proxy-header-badge"
+                                />
+                              )}
+                            </span>
+                          </CardTitle>
+                          <CardDescription className="settings-subsection-subtitle">
+                            {t("settings.behaviorProxyDesc")}
+                          </CardDescription>
+                        </div>
+                        <CardAction className="settings-proxy-card-action">
+                          <Switch
+                            checked={systemProxyEnabledDraft}
+                            onCheckedChange={handleToggleSystemProxy}
+                            aria-label={t("settings.behaviorProxyEnabled")}
+                          />
+                        </CardAction>
+                      </CardHeader>
+                      <CardContent className="settings-basic-sounds-card-content settings-proxy-card-content">
+                        <div className="settings-proxy-input-row">
+                          <Label
+                            className="settings-visually-hidden"
+                            htmlFor="system-proxy-url"
+                          >
+                            {t("settings.behaviorProxyAddress")}
+                          </Label>
+                          <div className="settings-proxy-input-shell">
+                            <Input
+                              id="system-proxy-url"
+                              className="settings-proxy-input"
+                              value={systemProxyUrlDraft}
+                              onChange={(event) => {
+                                setSystemProxyUrlDraft(event.target.value);
+                                setSystemProxyError(null);
+                                setSystemProxyNotice(null);
+                              }}
+                              placeholder={t("settings.behaviorProxyAddressPlaceholder")}
+                              spellCheck={false}
+                              autoCapitalize="off"
+                              autoCorrect="off"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="settings-proxy-save-btn"
+                            onClick={() => void handleSaveSystemProxy()}
+                            disabled={systemProxySaving || !systemProxyDirty}
+                          >
+                            <Save size={14} aria-hidden />
+                            {t("settings.behaviorProxySave")}
+                          </Button>
+                        </div>
+                        <div className="settings-help settings-sound-hint settings-sound-hint-shadcn settings-proxy-hint">
+                          <span className="settings-sound-hint-copy">
+                            {t("settings.behaviorProxyHint")}
+                          </span>
+                        </div>
+                        {systemProxyNotice ? (
+                          <div
+                            className={
+                              systemProxyNotice.kind === "error"
+                                ? "settings-inline-error"
+                                : "settings-inline-success"
+                            }
+                            role={systemProxyNotice.kind === "error" ? "alert" : "status"}
+                          >
+                            {systemProxyNotice.message}
+                          </div>
+                        ) : null}
+                        {systemProxyError ? (
+                          <div className="settings-toggle-subtitle" role="alert">
+                            {systemProxyError}
+                          </div>
+                        ) : null}
+                      </CardContent>
                     </Card>
                     <Card
                       className={`settings-basic-group-card settings-basic-shadcn-card settings-basic-sounds-card${
@@ -3929,6 +4169,35 @@ export function SettingsView({
                       <div>
                         {t("settings.appServerLabel")} {doctorState.result.appServerOk ? t("settings.statusOk") : t("settings.statusFailed")}
                       </div>
+                      {doctorState.result.appServerProbeStatus && (
+                        <div>
+                          <strong>{t("settings.doctorAppServerProbe")}:</strong> {doctorState.result.appServerProbeStatus}
+                        </div>
+                      )}
+                      {doctorState.result.resolvedBinaryPath && (
+                        <div>
+                          <strong>{t("settings.doctorResolvedBinary")}:</strong> {doctorState.result.resolvedBinaryPath}
+                        </div>
+                      )}
+                      {doctorState.result.wrapperKind && (
+                        <div>
+                          <strong>{t("settings.doctorWrapperKind")}:</strong> {doctorState.result.wrapperKind}
+                        </div>
+                      )}
+                      {doctorState.result.fallbackRetried ? (
+                        <div>
+                          <strong>{t("settings.doctorWrapperFallbackRetry")}:</strong> {t("settings.doctorAttempted")}
+                        </div>
+                      ) : null}
+                      {doctorState.result.proxyEnvSnapshot &&
+                      Object.keys(doctorState.result.proxyEnvSnapshot).length > 0 ? (
+                        <div>
+                          <strong>{t("settings.doctorProxyEnvironment")}:</strong>{" "}
+                          {Object.entries(doctorState.result.proxyEnvSnapshot)
+                            .map(([key, value]) => `${key}=${value ?? t("settings.notSet")}`)
+                            .join(" · ")}
+                        </div>
+                      ) : null}
                       <div>
                         {t("settings.nodeLabel")}{" "}
                         {doctorState.result.nodeOk
@@ -3950,14 +4219,27 @@ export function SettingsView({
                       {doctorState.result.debug && (
                         <details className="settings-doctor-debug">
                           <summary style={{ cursor: "pointer", marginTop: "8px", fontWeight: "bold" }}>
-                            Debug Info (Click to expand)
+                            {t("settings.doctorDebugInfo")} ({t("settings.doctorClickToExpand")})
                           </summary>
                           <div style={{ marginTop: "8px", fontSize: "12px", fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                            <div><strong>Platform:</strong> {doctorState.result.debug.platform} ({doctorState.result.debug.arch})</div>
-                            <div><strong>Claude Found:</strong> {doctorState.result.debug.claudeFound ?? "Not found"}</div>
-                            <div><strong>Codex Found:</strong> {doctorState.result.debug.codexFound ?? "Not found"}</div>
-                            <div><strong>Claude (standard which):</strong> {doctorState.result.debug.claudeStandardWhich ?? "Not found"}</div>
-                            <div><strong>Codex (standard which):</strong> {doctorState.result.debug.codexStandardWhich ?? "Not found"}</div>
+                            <div><strong>{t("settings.doctorPlatform")}:</strong> {doctorState.result.debug.platform} ({doctorState.result.debug.arch})</div>
+                            <div><strong>{t("settings.doctorResolvedBinary")}:</strong> {doctorState.result.debug.resolvedBinaryPath ?? t("settings.notFound")}</div>
+                            <div><strong>{t("settings.doctorWrapperKind")}:</strong> {doctorState.result.debug.wrapperKind ?? t("settings.statusUnknown")}</div>
+                            <div><strong>{t("settings.doctorPathUsed")}:</strong> {doctorState.result.debug.pathEnvUsed ?? t("settings.notSet")}</div>
+                            <div><strong>{t("settings.doctorClaudeFound")}:</strong> {doctorState.result.debug.claudeFound ?? t("settings.notFound")}</div>
+                            <div><strong>{t("settings.doctorCodexFound")}:</strong> {doctorState.result.debug.codexFound ?? t("settings.notFound")}</div>
+                            <div><strong>{t("settings.doctorClaudeStandardWhich")}:</strong> {doctorState.result.debug.claudeStandardWhich ?? t("settings.notFound")}</div>
+                            <div><strong>{t("settings.doctorCodexStandardWhich")}:</strong> {doctorState.result.debug.codexStandardWhich ?? t("settings.notFound")}</div>
+                            {doctorState.result.debug.proxyEnvSnapshot && (
+                              <>
+                                <div style={{ marginTop: "8px" }}><strong>{t("settings.doctorProxyEnvironment")}:</strong></div>
+                                {Object.entries(doctorState.result.debug.proxyEnvSnapshot).map(([key, value]) => (
+                                  <div key={key} style={{ marginLeft: "12px" }}>
+                                    <strong>{key}:</strong> {value ?? t("settings.notSet")}
+                                  </div>
+                                ))}
+                              </>
+                            )}
                             <div style={{ marginTop: "8px" }}><strong>Environment Variables:</strong></div>
                             {Object.entries(doctorState.result.debug.envVars).map(([key, value]) => (
                               <div key={key} style={{ marginLeft: "12px" }}>

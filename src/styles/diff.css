@@ -1,15 +1,15 @@
 .diff-panel {
   --git-filetree-section-gap: 2px;
-  --git-filetree-section-padding: 8px;
+  --git-filetree-section-padding: 6px;
   --git-filetree-section-radius: 12px;
   --git-filetree-section-border: color-mix(in srgb, var(--border-default) 48%, transparent);
   --git-filetree-section-bg: color-mix(in srgb, var(--surface-card) 46%, transparent);
-  --git-filetree-row-min-height: 30px;
+  --git-filetree-row-min-height: 28px;
   --git-filetree-row-gap: 8px;
-  --git-filetree-row-pad-y: 4px;
-  --git-filetree-row-pad-x: 10px;
+  --git-filetree-row-pad-y: 3px;
+  --git-filetree-row-pad-x: 8px;
   --git-filetree-row-radius: 7px;
-  --git-filetree-indent-step: 14px;
+  --git-filetree-indent-step: 10px;
   --git-filetree-icon-size: 12px;
   --git-filetree-tree-line-color: color-mix(in srgb, var(--text-muted, #64748b) 34%, transparent);
   --git-filetree-row-hover-bg: color-mix(in srgb, var(--surface-control-hover) 58%, transparent);
@@ -22,7 +22,7 @@
   --git-filetree-badge-pad-x: 8px;
   --git-filetree-badge-radius: 999px;
   background: transparent;
-  padding: 12px 12px 0;
+  padding: 8px 8px 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -441,6 +441,86 @@
   opacity: 0.72;
 }
 
+.git-filetree-section-header.is-compact {
+  gap: 8px;
+  padding-right: 6px;
+}
+
+.diff-tree-summary-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.diff-tree-summary-root {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  flex: 1 1 auto;
+}
+
+.diff-tree-summary-root.is-static {
+  cursor: default;
+}
+
+.diff-tree-summary-root-toggle,
+.diff-tree-summary-root-icon {
+  flex: 0 0 auto;
+}
+
+.diff-tree-summary-root-name,
+.diff-tree-summary-section-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-tree-summary-section-label {
+  color: var(--text-secondary);
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.diff-section-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.diff-section-indicator svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.diff-section-indicator strong {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.diff-section-indicator.is-staged {
+  color: color-mix(in srgb, var(--status-success, #47d488) 78%, var(--text-primary));
+}
+
+.diff-section-indicator.is-unstaged {
+  color: color-mix(in srgb, var(--text-secondary) 88%, var(--text-primary));
+}
+
+
 .diff-list-view-toggle {
   display: inline-flex;
   align-items: center;
@@ -572,7 +652,7 @@
 .diff-section {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--git-filetree-section-gap) + 4px);
+  gap: calc(var(--git-filetree-section-gap) + 2px);
   padding: var(--git-filetree-section-padding);
   border-radius: var(--git-filetree-section-radius);
   background: var(--git-filetree-section-bg);
@@ -585,7 +665,7 @@
   color: var(--text-secondary);
   text-transform: none;
   letter-spacing: 0.01em;
-  padding: 3px 6px 1px;
+  padding: 1px 4px 0;
   font-weight: 600;
 }
 
@@ -613,6 +693,22 @@
 .diff-section-tree-list {
   gap: var(--git-filetree-section-gap);
   overflow-x: hidden;
+}
+
+.diff-section-tree-list.is-compact-root {
+  position: relative;
+}
+
+.diff-section-tree-list.is-compact-root::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: -6px;
+  bottom: 0;
+  width: 1.25px;
+  background: var(--git-filetree-tree-line-color);
+  opacity: 1;
+  pointer-events: none;
 }
 
 .diff-tree-folder-group {

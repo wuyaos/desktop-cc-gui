@@ -1900,6 +1900,10 @@
   animation: sidebar-thread-engine-spin 1.2s linear infinite;
 }
 
+.thread-proxy-badge {
+  margin-right: 2px;
+}
+
 .thread-name {
   flex: 1;
   min-width: 0;

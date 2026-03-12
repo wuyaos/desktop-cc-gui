@@ -589,6 +589,10 @@ pub(crate) struct AppSettings {
     pub(crate) remote_backend_host: String,
     #[serde(default, rename = "remoteBackendToken")]
     pub(crate) remote_backend_token: Option<String>,
+    #[serde(default, rename = "systemProxyEnabled")]
+    pub(crate) system_proxy_enabled: bool,
+    #[serde(default, rename = "systemProxyUrl")]
+    pub(crate) system_proxy_url: Option<String>,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
     pub(crate) default_access_mode: String,
     #[serde(
@@ -1137,6 +1141,8 @@ impl Default for AppSettings {
             backend_mode: BackendMode::Local,
             remote_backend_host: default_remote_backend_host(),
             remote_backend_token: None,
+            system_proxy_enabled: false,
+            system_proxy_url: None,
             default_engine: None,
             default_access_mode: "full-access".to_string(),
             composer_model_shortcut: default_composer_model_shortcut(),
@@ -1269,6 +1275,8 @@ mod tests {
         assert!(matches!(settings.backend_mode, BackendMode::Local));
         assert_eq!(settings.remote_backend_host, "127.0.0.1:4732");
         assert!(settings.remote_backend_token.is_none());
+        assert!(!settings.system_proxy_enabled);
+        assert!(settings.system_proxy_url.is_none());
         assert_eq!(settings.default_access_mode, "full-access");
         assert_eq!(
             settings.composer_model_shortcut.as_deref(),

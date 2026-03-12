@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::dictation::DictationState;
 use crate::engine::EngineManager;
+use crate::shared::proxy_core;
 use crate::storage::{read_settings, read_workspaces};
 use crate::types::{AppSettings, WorkspaceEntry};
 
@@ -36,6 +37,9 @@ impl AppState {
         let settings_path = data_dir.join("settings.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
         let app_settings = read_settings(&settings_path).unwrap_or_default();
+        if let Err(error) = proxy_core::apply_app_proxy_settings(&app_settings) {
+            eprintln!("[proxy] failed to apply persisted proxy settings: {error}");
+        }
         Self {
             workspaces: Mutex::new(workspaces),
             sessions: Mutex::new(HashMap::new()),

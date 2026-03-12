@@ -1,16 +1,21 @@
 import type { GitHubIssue, GitHubPullRequest, GitLogEntry } from "../../../types";
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
+import Check from "lucide-react/dist/esm/icons/check";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import ChevronsDownUp from "lucide-react/dist/esm/icons/chevrons-down-up";
 import ChevronsUpDown from "lucide-react/dist/esm/icons/chevrons-up-down";
-import Check from "lucide-react/dist/esm/icons/check";
+import CircleCheckBig from "lucide-react/dist/esm/icons/circle-check-big";
 import FolderTree from "lucide-react/dist/esm/icons/folder-tree";
 import GitPullRequest from "lucide-react/dist/esm/icons/git-pull-request";
 import History from "lucide-react/dist/esm/icons/history";
@@ -18,6 +23,7 @@ import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import MessageSquareWarning from "lucide-react/dist/esm/icons/message-square-warning";
 import Minus from "lucide-react/dist/esm/icons/minus";
 import Plus from "lucide-react/dist/esm/icons/plus";
+import SquarePen from "lucide-react/dist/esm/icons/square-pen";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
 import Upload from "lucide-react/dist/esm/icons/upload";
 import X from "lucide-react/dist/esm/icons/x";
@@ -148,6 +154,8 @@ function splitPath(path: string) {
   }
   return { name: parts[parts.length - 1], dir: parts.slice(0, -1).join("/") };
 }
+
+const TREE_INDENT_STEP = 10;
 
 function getTreeLineOpacity(depth: number): string {
   return depth === 1 ? "1" : "0";
@@ -391,11 +399,11 @@ function DiffFileRow({
   const showStage = section === "unstaged" && Boolean(onStageFile);
   const showUnstage = section === "staged" && Boolean(onUnstageFile);
   const showDiscard = section === "unstaged" && Boolean(onDiscardFile);
-  const treeIndentPx = indentLevel * 14;
+  const treeIndentPx = indentLevel * TREE_INDENT_STEP;
   const treeRowStyle = treeItem
     ? ({
         paddingLeft: `${treeIndentPx}px`,
-        ["--git-tree-indent-x" as string]: `${Math.max(treeIndentPx - 7, 0)}px`,
+        ["--git-tree-indent-x" as string]: `${Math.max(treeIndentPx - 5, 0)}px`,
         ["--git-tree-line-opacity" as string]: getTreeLineOpacity(treeDepth - 1),
       } as CSSProperties)
     : undefined;
@@ -500,6 +508,9 @@ type DiffSectionProps = {
   title: string;
   files: DiffFile[];
   section: "staged" | "unstaged";
+  rootFolderName?: string;
+  leadingMeta?: ReactNode;
+  compactHeader?: boolean;
   selectedFiles: Set<string>;
   selectedPath: string | null;
   onSelectFile?: (path: string | null) => void;
@@ -524,10 +535,28 @@ type DiffSectionProps = {
   ) => void;
 };
 
+function renderSectionIndicator(
+  section: "staged" | "unstaged",
+  count: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  const label = section === "staged" ? t("git.staged") : t("git.unstaged");
+  const Icon = section === "staged" ? CircleCheckBig : SquarePen;
+  return (
+    <span className={`diff-section-indicator is-${section}`} aria-label={`${label} (${count})`} title={label}>
+      <Icon size={12} aria-hidden />
+      <strong>{count}</strong>
+    </span>
+  );
+}
+
 function DiffSection({
   title,
   files,
   section,
+  rootFolderName,
+  leadingMeta,
+  compactHeader = false,
   selectedFiles,
   selectedPath,
   onSelectFile,
@@ -549,13 +578,33 @@ function DiffSection({
   const canUnstageAll = section === "staged" && Boolean(onUnstageFile) && filePaths.length > 0;
   const canDiscardAll = section === "unstaged" && Boolean(onDiscardFiles) && filePaths.length > 0;
   const showSectionActions = canStageAll || canUnstageAll || canDiscardAll;
+  const showCompactRoot = compactHeader && Boolean(rootFolderName?.trim());
 
   return (
     <div className={`diff-section git-filetree-section diff-section--${section}`}>
-      <div className="diff-section-title diff-section-title--row git-filetree-section-header">
-        <span>
-          {title} ({files.length})
+      <div
+        className={`diff-section-title diff-section-title--row git-filetree-section-header${
+          compactHeader ? " is-compact" : ""
+        }`}
+      >
+        {showCompactRoot ? (
+          <span className="diff-tree-summary-root is-static">
+            <span className="diff-tree-summary-root-toggle" aria-hidden>
+              <span className="diff-tree-folder-spacer" />
+            </span>
+            <FileIcon
+              filePath={rootFolderName ?? ""}
+              isFolder
+              isOpen={false}
+              className="diff-tree-summary-root-icon"
+            />
+            <span className="diff-tree-summary-root-name">{rootFolderName}</span>
+          </span>
+        ) : null}
+        <span className="diff-tree-summary-section-label">
+          {renderSectionIndicator(section, files.length, t)}
         </span>
+        {leadingMeta ? <span className="diff-tree-summary-meta">{leadingMeta}</span> : null}
         {showSectionActions && (
           <div
             className="diff-section-actions git-filetree-section-actions"
@@ -686,6 +735,8 @@ type DiffTreeSectionProps = DiffSectionProps & {
   collapsedFolders: Set<string>;
   onToggleFolder: (key: string) => void;
   rootFolderName: string;
+  leadingMeta?: ReactNode;
+  compactHeader?: boolean;
 };
 
 function DiffTreeSection({
@@ -706,6 +757,8 @@ function DiffTreeSection({
   collapsedFolders,
   onToggleFolder,
   rootFolderName,
+  leadingMeta,
+  compactHeader = false,
 }: DiffTreeSectionProps) {
   const { t } = useTranslation();
   const tree = useMemo(() => buildDiffTree(files, section), [files, section]);
@@ -722,6 +775,7 @@ function DiffTreeSection({
   const hasRootFolderName = rootFolderName.trim().length > 0;
   const rootFolderKey = `${section}:__repo_root__/`;
   const rootCollapsed = collapsedFolders.has(rootFolderKey);
+  const useCompactHeader = compactHeader && hasRootFolderName;
 
   const focusSiblingTreeNode = useCallback((from: HTMLElement, direction: -1 | 1) => {
     const container = treeContainerRef.current;
@@ -829,14 +883,14 @@ function DiffTreeSection({
     (folder: DiffTreeFolderNode, depth: number, parentKey?: string) => {
       const isCollapsed = collapsedFolders.has(folder.key);
       const hasChildren = folder.folders.size > 0 || folder.files.length > 0;
-      const treeIndentPx = depth * 14;
+      const treeIndentPx = depth * TREE_INDENT_STEP;
       const folderStyle = {
         paddingLeft: `${treeIndentPx}px`,
-        ["--git-tree-indent-x" as string]: `${Math.max(treeIndentPx - 7, 0)}px`,
+        ["--git-tree-indent-x" as string]: `${Math.max(treeIndentPx - 5, 0)}px`,
         ["--git-tree-line-opacity" as string]: getTreeLineOpacity(depth),
       } as CSSProperties;
       const childTreeStyle = {
-        ["--git-tree-branch-x" as string]: `${Math.max((depth + 1) * 14 - 7, 0)}px`,
+        ["--git-tree-branch-x" as string]: `${Math.max((depth + 1) * TREE_INDENT_STEP - 5, 0)}px`,
         ["--git-tree-branch-opacity" as string]: getTreeLineOpacity(depth + 1),
       } as CSSProperties;
       return (
@@ -926,10 +980,43 @@ function DiffTreeSection({
 
   return (
     <div className={`diff-section git-filetree-section diff-section--${section}`}>
-      <div className="diff-section-title diff-section-title--row git-filetree-section-header">
-        <span>
-          {title} ({files.length})
+      <div
+        className={`diff-section-title diff-section-title--row git-filetree-section-header${
+          useCompactHeader ? " is-compact" : ""
+        }`}
+      >
+        {useCompactHeader ? (
+          <button
+            type="button"
+            className="diff-tree-summary-root"
+            aria-label={rootFolderName}
+            aria-expanded={hasTreeNodes ? !rootCollapsed : undefined}
+            onClick={() => {
+              if (hasTreeNodes) {
+                onToggleFolder(rootFolderKey);
+              }
+            }}
+          >
+            <span className="diff-tree-summary-root-toggle" aria-hidden>
+              {hasTreeNodes ? (
+                rootCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />
+              ) : (
+                <span className="diff-tree-folder-spacer" />
+              )}
+            </span>
+            <FileIcon
+              filePath={rootFolderName}
+              isFolder
+              isOpen={!rootCollapsed}
+              className="diff-tree-summary-root-icon"
+            />
+            <span className="diff-tree-summary-root-name">{rootFolderName}</span>
+          </button>
+        ) : null}
+        <span className="diff-tree-summary-section-label">
+          {renderSectionIndicator(section, files.length, t)}
         </span>
+        {leadingMeta ? <span className="diff-tree-summary-meta">{leadingMeta}</span> : null}
         {showSectionActions && (
           <div
             className="diff-section-actions git-filetree-section-actions"
@@ -992,12 +1079,14 @@ function DiffTreeSection({
       </div>
       <div
         ref={treeContainerRef}
-        className="diff-section-list diff-section-tree-list git-filetree-list git-filetree-list--tree"
+        className={`diff-section-list diff-section-tree-list git-filetree-list git-filetree-list--tree${
+          useCompactHeader ? " is-compact-root" : ""
+        }`}
         role="tree"
         aria-label={title}
         onKeyDownCapture={handleTreeKeyDownCapture}
       >
-        {hasTreeNodes && hasRootFolderName && (
+        {hasTreeNodes && hasRootFolderName && !useCompactHeader && (
           <div className="diff-tree-folder-group">
             <button
               type="button"
@@ -1028,7 +1117,7 @@ function DiffTreeSection({
                 className="diff-tree-folder-children"
                 style={
                   {
-                    ["--git-tree-branch-x" as string]: `${Math.max(1 * 14 - 7, 0)}px`,
+                    ["--git-tree-branch-x" as string]: `${Math.max(TREE_INDENT_STEP - 5, 0)}px`,
                     ["--git-tree-branch-opacity" as string]: getTreeLineOpacity(1),
                   } as CSSProperties
                 }
@@ -1064,6 +1153,36 @@ function DiffTreeSection({
               </div>
             )}
           </div>
+        )}
+        {hasTreeNodes && useCompactHeader && !rootCollapsed && (
+          <>
+            {Array.from(tree.folders.values()).map((folder) => renderFolder(folder, 1, rootFolderKey))}
+            {tree.files.map((file) => {
+              const isSelected = selectedFiles.size > 1 && selectedFiles.has(file.path);
+              const isActive = selectedPath === file.path;
+              return (
+                <DiffFileRow
+                  key={`${section}-${file.path}`}
+                  file={file}
+                  isSelected={isSelected}
+                  isActive={isActive}
+                  section={section}
+                  indentLevel={1}
+                  showDirectory={false}
+                  treeItem
+                  treeDepth={2}
+                  treeParentFolderKey={rootFolderKey}
+                  onClick={(event) => onFileClick(event, file.path, section)}
+                  onKeySelect={() => onSelectFile?.(file.path)}
+                  onOpenPreview={() => onOpenFilePreview?.(file, section)}
+                  onContextMenu={(event) => onShowFileMenu(event, file.path, section)}
+                  onStageFile={onStageFile}
+                  onUnstageFile={onUnstageFile}
+                  onDiscardFile={onDiscardFile}
+                />
+              );
+            })}
+          </>
         )}
         {hasTreeNodes && !hasRootFolderName && (
           <>
@@ -1765,6 +1884,8 @@ export function GitDiffPanel({
   const showAheadSection = logUpstream && logAhead > 0;
   const showBehindSection = logUpstream && logBehind > 0;
   const hasDiffTotals = totalAdditions > 0 || totalDeletions > 0;
+  const primaryTreeSection =
+    stagedFiles.length > 0 ? "staged" : unstagedFiles.length > 0 ? "unstaged" : null;
   const diffTotalsNode = (
     <>
       <span className="diff-status-add">+{totalAdditions}</span>
@@ -1791,6 +1912,7 @@ export function GitDiffPanel({
     : logUpstream
       ? `${logSyncLabel} · ${fileStatus}`
       : fileStatus;
+  const compactTreeMetaNode = hasDiffTotals ? diffTotalsNode : <span>{fileStatus}</span>;
   const hasGitRoot = Boolean(gitRoot && gitRoot.trim());
   const showGitRootPanel =
     isMissingRepo(error) ||
@@ -1805,6 +1927,8 @@ export function GitDiffPanel({
     getPathLeafName(normalizedWorkspacePath) ||
     (workspaceId?.trim() ?? "");
   const hasAnyChanges = stagedFiles.length > 0 || unstagedFiles.length > 0;
+  const useCompactTreeSectionHeaders = gitDiffListView === "tree" && Boolean(repositoryRootName);
+  const useUnifiedDiffSummary = mode === "diff" && hasAnyChanges;
   const showApplyWorktree =
     mode === "diff" && Boolean(onApplyWorktreeChanges) && hasAnyChanges;
   const canGenerateCommitMessage = hasAnyChanges;
@@ -1952,7 +2076,7 @@ export function GitDiffPanel({
       </div>
       {mode === "diff" ? (
         <>
-          <div className="diff-status">{diffStatusNode}</div>
+          {!useUnifiedDiffSummary ? <div className="diff-status">{diffStatusNode}</div> : null}
           {worktreeApplyError && <div className="diff-error">{worktreeApplyError}</div>}
         </>
       ) : mode === "log" ? (
@@ -1991,10 +2115,10 @@ export function GitDiffPanel({
           </div>
         </>
       )}
-      {mode === "diff" || mode === "log" ? (
+      {(mode === "diff" || mode === "log") && !useUnifiedDiffSummary ? (
         <div className="diff-branch">{branchName || t("git.unknown")}</div>
       ) : null}
-      {mode !== "issues" && hasGitRoot && (
+      {mode !== "issues" && hasGitRoot && !useUnifiedDiffSummary && (
         <div className="git-root-current">
           <span className="git-root-label">{t("git.path")}</span>
           <span className="git-root-path" title={gitRoot ?? ""}>
@@ -2232,6 +2356,8 @@ export function GitDiffPanel({
                     files={stagedFiles}
                     section="staged"
                     rootFolderName={repositoryRootName}
+                    leadingMeta={primaryTreeSection === "staged" ? compactTreeMetaNode : undefined}
+                    compactHeader={useCompactTreeSectionHeaders}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onSelectFile={onSelectFile}
@@ -2249,6 +2375,9 @@ export function GitDiffPanel({
                     title={t("git.staged")}
                     files={stagedFiles}
                     section="staged"
+                    rootFolderName={repositoryRootName}
+                    leadingMeta={primaryTreeSection === "staged" ? compactTreeMetaNode : undefined}
+                    compactHeader={primaryTreeSection === "staged"}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onSelectFile={onSelectFile}
@@ -2267,6 +2396,8 @@ export function GitDiffPanel({
                     files={unstagedFiles}
                     section="unstaged"
                     rootFolderName={repositoryRootName}
+                    leadingMeta={primaryTreeSection === "unstaged" ? compactTreeMetaNode : undefined}
+                    compactHeader={useCompactTreeSectionHeaders}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onSelectFile={onSelectFile}
@@ -2285,6 +2416,9 @@ export function GitDiffPanel({
                     title={t("git.unstaged")}
                     files={unstagedFiles}
                     section="unstaged"
+                    rootFolderName={repositoryRootName}
+                    leadingMeta={primaryTreeSection === "unstaged" ? compactTreeMetaNode : undefined}
+                    compactHeader={primaryTreeSection === "unstaged"}
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onSelectFile={onSelectFile}

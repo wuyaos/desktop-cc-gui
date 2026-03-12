@@ -5036,11 +5036,49 @@
   box-shadow: 0 10px 26px color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
+.settings-section-basic .settings-basic-proxy-card.is-enabled {
+  border-color: var(--settings-basic-border);
+  background: var(--settings-basic-surface);
+  box-shadow: none;
+}
+
+.settings-section-basic .settings-proxy-card-header {
+  padding-bottom: 8px;
+  gap: 12px;
+}
+
+.settings-section-basic .settings-proxy-card-action {
+  margin-left: auto;
+  align-self: center;
+}
+
 .settings-section-basic .settings-basic-sounds-card-content {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 0 16px 16px;
+}
+
+.settings-section-basic .settings-proxy-card-content {
+  gap: 8px;
+  padding-top: 0;
+}
+
+.settings-section-basic .settings-proxy-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-section-basic .settings-proxy-input {
+  min-height: 36px;
+}
+
+.settings-section-basic .settings-proxy-save-btn {
+  min-height: 36px;
+  white-space: nowrap;
+  padding-inline: 12px;
 }
 
 .settings-section-basic .settings-sound-toggle-row {
@@ -5263,6 +5301,44 @@
   font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.settings-section-basic .settings-proxy-card-title,
+.settings-section-basic .settings-proxy-toggle-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-section-basic .settings-proxy-header-badge,
+.settings-section-basic .settings-proxy-toggle-badge,
+.settings-section-basic .settings-proxy-input-badge {
+  opacity: 0.98;
+}
+
+.settings-section-basic .settings-proxy-input-shell {
+  position: relative;
+}
+
+.settings-section-basic .settings-proxy-hint {
+  padding: 8px 10px;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--settings-basic-control) 24%, transparent);
+}
+
+.settings-section-basic .settings-proxy-hint .settings-sound-hint-copy {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .settings-section-basic .settings-proxy-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-section-basic .settings-proxy-save-btn {
+    width: 100%;
+  }
 }
 
 .settings-section-basic .settings-toggle-subtitle {

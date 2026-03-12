@@ -4208,6 +4208,8 @@ function MainApp() {
     threadListCursorByWorkspace,
     activeWorkspaceId,
     activeThreadId,
+    systemProxyEnabled: appSettings.systemProxyEnabled,
+    systemProxyUrl: appSettings.systemProxyUrl,
     activeItems,
     activeRateLimits,
     usageShowRemaining: appSettings.usageShowRemaining,

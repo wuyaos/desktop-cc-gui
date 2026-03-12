@@ -194,6 +194,59 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(onTextChange).toHaveBeenCalledWith('hello', null);
   });
 
+  it("forwards submitted content snapshot to parent send handler", async () => {
+    const onSend = vi.fn();
+    renderAdapter({ onSend });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onSubmit?: (content: string) => void;
+    };
+    expect(typeof latest.onSubmit).toBe("function");
+
+    act(() => {
+      latest.onSubmit?.("fresh child snapshot");
+    });
+
+    expect(onSend).toHaveBeenCalledWith("fresh child snapshot", undefined);
+  });
+
+  it("converts submitted attachments into image inputs for parent send handler", async () => {
+    const onSend = vi.fn();
+    renderAdapter({ onSend });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onSubmit?: (
+        content: string,
+        attachments?: Array<{
+          id: string;
+          fileName: string;
+          mediaType: string;
+          data: string;
+        }>,
+      ) => void;
+    };
+
+    act(() => {
+      latest.onSubmit?.("fresh child snapshot", [
+        {
+          id: "att-1",
+          fileName: "image.png",
+          mediaType: "image/png",
+          data: "ZmFrZS1pbWFnZQ==",
+        },
+      ]);
+    });
+
+    expect(onSend).toHaveBeenCalledWith(
+      "fresh child snapshot",
+      ["data:image/png;base64,ZmFrZS1pbWFnZQ=="],
+    );
+  });
+
   it('forwards dual context usage model and flag to ChatInputBox', async () => {
     renderAdapter({
       contextUsage: { used: 120_000, total: 256_000 },

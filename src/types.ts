@@ -156,6 +156,8 @@ export type AppSettings = {
   backendMode: BackendMode;
   remoteBackendHost: string;
   remoteBackendToken: string | null;
+  systemProxyEnabled: boolean;
+  systemProxyUrl: string | null;
   defaultAccessMode: AccessMode;
   composerModelShortcut: string | null;
   composerAccessShortcut: string | null;
@@ -227,14 +229,24 @@ export type CodexDoctorResult = {
   codexBin: string | null;
   version: string | null;
   appServerOk: boolean;
+  appServerProbeStatus?: string | null;
   details: string | null;
   path: string | null;
+  pathEnvUsed?: string | null;
+  proxyEnvSnapshot?: Record<string, string | null>;
   nodeOk: boolean;
   nodeVersion: string | null;
   nodeDetails: string | null;
+  resolvedBinaryPath?: string | null;
+  wrapperKind?: string | null;
+  fallbackRetried?: boolean;
   debug?: {
     platform: string;
     arch: string;
+    resolvedBinaryPath?: string | null;
+    wrapperKind?: string | null;
+    pathEnvUsed?: string | null;
+    proxyEnvSnapshot?: Record<string, string | null>;
     envVars: Record<string, string | null>;
     extraSearchPaths: Array<{
       path: string;

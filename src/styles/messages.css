@@ -171,12 +171,18 @@
 .working {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 0;
   margin: 4px 24px 12px 0;
   color: var(--text-fainter);
   font-size: 12px;
   letter-spacing: 0.02em;
+}
+
+.working-proxy-badge {
+  margin-right: 0;
+  margin-left: 1px;
 }
 
 .working-spinner {

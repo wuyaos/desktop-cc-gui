@@ -136,6 +136,8 @@ type LayoutNodesOptions = {
   threadListCursorByWorkspace: Record<string, string | null>;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
+  systemProxyEnabled?: boolean;
+  systemProxyUrl?: string | null;
   activeItems: ConversationItem[];
   activeRateLimits: RateLimitSnapshot | null;
   usageShowRemaining: boolean;
@@ -695,6 +697,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       threadListCursorByWorkspace={options.threadListCursorByWorkspace}
       activeWorkspaceId={options.activeWorkspaceId}
       activeThreadId={options.activeThreadId}
+      systemProxyEnabled={options.systemProxyEnabled}
+      systemProxyUrl={options.systemProxyUrl}
       accountRateLimits={options.activeRateLimits}
       usageShowRemaining={options.usageShowRemaining}
       accountInfo={options.accountInfo}
@@ -779,6 +783,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onOpenPlanPanel={options.onOpenPlanPanel}
       onOpenWorkspaceFile={options.onOpenFile}
       isThinking={isThreadThinking}
+      proxyEnabled={options.systemProxyEnabled}
+      proxyUrl={options.systemProxyUrl}
       processingStartedAt={activeThreadStatus?.processingStartedAt ?? null}
       lastDurationMs={activeThreadStatus?.lastDurationMs ?? null}
       heartbeatPulse={heartbeatPulseRef.current ?? 0}
@@ -788,6 +794,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     options.activeThreadId,
     options.activeWorkspace?.id,
     options.activeWorkspace?.path,
+    options.systemProxyEnabled,
+    options.systemProxyUrl,
     options.openAppTargets,
     options.selectedOpenAppId,
     options.showMessageAnchors,

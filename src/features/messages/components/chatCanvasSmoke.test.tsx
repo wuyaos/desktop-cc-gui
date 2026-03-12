@@ -32,7 +32,7 @@ describe("chat canvas smoke", () => {
     cleanup();
   });
 
-  it("covers message + tool group + plan quick view + request user input", async () => {
+  it("covers message + tool group + inline plan quick view + request user input", async () => {
     const request: RequestUserInputRequest = {
       workspace_id: "ws-1",
       request_id: "req-1",
@@ -91,7 +91,7 @@ describe("chat canvas smoke", () => {
     );
 
     expect(screen.getByText("请继续")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: "Plan" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Plan" }));
     expect(screen.getByText("Apply patch")).toBeTruthy();
     expect(screen.getByText("Proceed with apply?")).toBeTruthy();
 
@@ -172,7 +172,7 @@ describe("chat canvas smoke", () => {
 
     expect(screen.getByText("History restored")).toBeTruthy();
     expect(screen.getByText("Replay this step?")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: "Plan" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Plan" }));
     expect(screen.getByText("Compare parity")).toBeTruthy();
   });
 });

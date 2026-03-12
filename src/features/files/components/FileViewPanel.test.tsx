@@ -49,7 +49,7 @@ vi.mock("@uiw/react-codemirror", async () => {
   const React = await import("react");
   const MockCodeMirror = React.forwardRef<
     { view: any },
-    { value?: string; onChange?: (value: string) => void }
+    { value?: string; onChange?: (value: string) => void; theme?: string }
   >((props, ref) => {
     const viewRef = React.useRef<any>({
       state: {
@@ -75,6 +75,7 @@ vi.mock("@uiw/react-codemirror", async () => {
     return (
       <textarea
         data-testid="mock-codemirror"
+        data-editor-theme={props.theme ?? ""}
         value={props.value ?? ""}
         onChange={(event) => props.onChange?.(event.target.value)}
       />
@@ -270,5 +271,127 @@ describe("FileViewPanel navigation", () => {
     });
     fireEvent.click(maximizeButton);
     expect(onToggleEditorFileMaximized).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("FileViewPanel markdown modes", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("opens markdown in edit mode by default", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "# Hello",
+      truncated: false,
+    });
+
+    const { container } = render(
+      <FileViewPanel
+        workspaceId="ws-md-1"
+        workspacePath="/repo"
+        filePath="README.md"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByTestId("mock-codemirror");
+    expect(container.querySelector(".fvp-preview-scroll")).toBeNull();
+    expect(container.querySelector(".fvp-markdown")).toBeNull();
+  });
+
+  it("toggles markdown preview and preserves edits", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "# Start",
+      truncated: false,
+    });
+
+    const { container } = render(
+      <FileViewPanel
+        workspaceId="ws-md-2"
+        workspacePath="/repo"
+        filePath="README.md"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const editor = (await screen.findByTestId("mock-codemirror")) as HTMLTextAreaElement;
+    fireEvent.change(editor, { target: { value: "# Updated" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /preview/i }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".fvp-preview-scroll")).toBeTruthy();
+      expect(screen.getByText("Updated")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+    const updatedEditor = (await screen.findByTestId("mock-codemirror")) as HTMLTextAreaElement;
+    expect(updatedEditor.value).toBe("# Updated");
+  });
+});
+
+describe("FileViewPanel editor theme selection", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    delete document.documentElement.dataset.theme;
+  });
+
+  it("uses light theme when data-theme is light", async () => {
+    document.documentElement.dataset.theme = "light";
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "console.log('hello');",
+      truncated: false,
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-theme-1"
+        workspacePath="/repo"
+        filePath="src/App.tsx"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const editor = await screen.findByTestId("mock-codemirror");
+    expect(editor.getAttribute("data-editor-theme")).toBe("light");
+  });
+
+  it("uses dark theme when data-theme is dark", async () => {
+    document.documentElement.dataset.theme = "dark";
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "console.log('hello');",
+      truncated: false,
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-theme-2"
+        workspacePath="/repo"
+        filePath="src/App.tsx"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const editor = await screen.findByTestId("mock-codemirror");
+    expect(editor.getAttribute("data-editor-theme")).toBe("dark");
   });
 });

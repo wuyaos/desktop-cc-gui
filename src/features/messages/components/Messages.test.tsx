@@ -534,6 +534,45 @@ describe("Messages", () => {
     expect(screen.queryByText("Legacy step")).toBeNull();
   });
 
+  it("opens the external plan panel when provided instead of inline expansion", () => {
+    const onOpenPlanPanel = vi.fn();
+
+    render(
+      <Messages
+        items={[]}
+        threadId="thread-plan"
+        workspaceId="ws-plan"
+        isThinking={false}
+        conversationState={{
+          items: [],
+          plan: {
+            turnId: "turn-plan",
+            explanation: "Panel plan",
+            steps: [{ step: "Open panel", status: "pending" }],
+          },
+          userInputQueue: [],
+          meta: {
+            workspaceId: "ws-plan",
+            threadId: "thread-plan",
+            engine: "codex",
+            activeTurnId: null,
+            isThinking: false,
+            heartbeatPulse: null,
+            historyRestoredAtMs: null,
+          },
+        }}
+        onOpenPlanPanel={onOpenPlanPanel}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Plan" }));
+
+    expect(onOpenPlanPanel).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Open panel")).toBeNull();
+  });
+
   it("prefers conversationState items for codex when state and legacy point to the same thread", () => {
     const legacyItems: ConversationItem[] = [
       {
@@ -1281,6 +1320,28 @@ describe("Messages", () => {
 
     expect(container.querySelector(".thinking-block")).toBeTruthy();
     expect(container.querySelector(".thinking-title")).toBeTruthy();
+  });
+
+  it("shows a prominent proxy badge in the working indicator when proxy is enabled", () => {
+    const { container } = render(
+      <Messages
+        items={[]}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking
+        proxyEnabled
+        proxyUrl="http://127.0.0.1:7890"
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const badge = container.querySelector(".working .working-proxy-badge");
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent ?? "").toBe("");
+    expect(badge?.classList.contains("proxy-status-badge--animated")).toBe(true);
+    expect(badge?.getAttribute("aria-label") ?? "").toContain("127.0.0.1:7890");
   });
 
   it("updates codex reasoning row when streamed body arrives", async () => {

@@ -83,8 +83,8 @@ use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use backend::app_server::{spawn_workspace_session, WorkspaceSession};
 use backend::events::{AppServerEvent, EventSink, TerminalOutput};
 use shared::{
-    codex_core, files_core, git_core, settings_core, thread_titles_core, workspaces_core,
-    worktree_core,
+    codex_core, files_core, git_core, proxy_core, settings_core, thread_titles_core,
+    workspaces_core, worktree_core,
 };
 use storage::{read_settings, read_workspaces};
 use text_encoding::decode_text_bytes;
@@ -179,6 +179,9 @@ impl DaemonState {
         let settings_path = config.data_dir.join("settings.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
         let app_settings = read_settings(&settings_path).unwrap_or_default();
+        if let Err(error) = proxy_core::apply_app_proxy_settings(&app_settings) {
+            eprintln!("[proxy] failed to apply persisted proxy settings: {error}");
+        }
         Self {
             data_dir: config.data_dir.clone(),
             workspaces: Mutex::new(workspaces),
@@ -501,8 +504,51 @@ impl DaemonState {
     }
 
     async fn update_app_settings(&self, settings: AppSettings) -> Result<AppSettings, String> {
-        settings_core::update_app_settings_core(settings, &self.app_settings, &self.settings_path)
+        let previous = self.app_settings.lock().await.clone();
+        let updated = settings_core::update_app_settings_core(
+            settings,
+            &self.app_settings,
+            &self.settings_path,
+        )
+        .await?;
+        let proxy_changed = previous.system_proxy_enabled != updated.system_proxy_enabled
+            || previous.system_proxy_url != updated.system_proxy_url;
+        if proxy_changed {
+            let client_version = env!("CARGO_PKG_VERSION").to_string();
+            if let Err(error) = settings_core::restart_codex_sessions_for_app_settings_change_core(
+                &self.workspaces,
+                &self.sessions,
+                &self.app_settings,
+                |entry, default_bin, codex_args, codex_home| {
+                    spawn_with_client(
+                        self.event_sink.clone(),
+                        client_version.clone(),
+                        entry,
+                        default_bin,
+                        codex_args,
+                        codex_home,
+                    )
+                },
+            )
             .await
+            {
+                let rollback_error = settings_core::restore_app_settings_core(
+                    &previous,
+                    &self.app_settings,
+                    &self.settings_path,
+                )
+                .await
+                .err();
+                let message = match rollback_error {
+                    Some(rollback_error) => {
+                        format!("{error} (rollback failed: {rollback_error})")
+                    }
+                    None => error,
+                };
+                return Err(message);
+            }
+        }
+        Ok(updated)
     }
 
     async fn list_workspace_files(

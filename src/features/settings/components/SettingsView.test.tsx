@@ -10,6 +10,7 @@ import {
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, WorkspaceInfo } from "../../../types";
+import { pushErrorToast } from "../../../services/toasts";
 import { SettingsView } from "./SettingsView";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -24,6 +25,10 @@ vi.mock("../../../i18n", () => ({
   },
 }));
 
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: vi.fn(),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -35,6 +40,8 @@ const baseSettings: AppSettings = {
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
   remoteBackendToken: null,
+  systemProxyEnabled: false,
+  systemProxyUrl: null,
   defaultAccessMode: "current",
   composerModelShortcut: null,
   composerAccessShortcut: null,
@@ -111,11 +118,17 @@ const createDoctorResult = () => ({
   codexBin: null,
   version: null,
   appServerOk: true,
+  appServerProbeStatus: "ok",
   details: null,
   path: null,
+  pathEnvUsed: null,
+  proxyEnvSnapshot: undefined,
   nodeOk: true,
   nodeVersion: null,
   nodeDetails: null,
+  resolvedBinaryPath: null,
+  wrapperKind: null,
+  fallbackRetried: false,
 });
 
 const renderDisplaySection = (
@@ -213,13 +226,79 @@ const renderComposerSection = (
 };
 
 describe("SettingsView Display", () => {
-  it("hides dictation, git, codex, and experimental sidebar entries", () => {
+  it("keeps codex, dictation, git, and experimental sidebar entries hidden", () => {
     renderDisplaySection();
 
     expect(screen.queryByRole("button", { name: "Dictation" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Git" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Codex" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Experimental" })).toBeNull();
+  });
+
+  it("renders codex doctor probe metadata including proxy context", async () => {
+    cleanup();
+    const onRunDoctor = vi.fn().mockResolvedValue({
+      ...createDoctorResult(),
+      version: "1.0.0",
+      path: "/usr/local/bin:/usr/bin",
+      pathEnvUsed: "/usr/local/bin:/usr/bin",
+      resolvedBinaryPath: "C:/Users/test/AppData/Roaming/npm/codex.cmd",
+      wrapperKind: "cmd-wrapper",
+      fallbackRetried: true,
+      proxyEnvSnapshot: {
+        HTTP_PROXY: "http://127.0.0.1:7890",
+        HTTPS_PROXY: null,
+      },
+      appServerProbeStatus: "fallback-ok",
+    });
+    render(
+      <SettingsView
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRunDoctor={onRunDoctor}
+        activeWorkspace={null}
+        activeEngine="codex"
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Run doctor" }));
+
+    await waitFor(() => {
+      expect(onRunDoctor).toHaveBeenCalled();
+    });
+    const doctorBody = document.querySelector(".settings-doctor-body");
+    expect(doctorBody?.textContent).toContain("App Server Probe: fallback-ok");
+    expect(doctorBody?.textContent).toContain(
+      "Resolved Binary: C:/Users/test/AppData/Roaming/npm/codex.cmd",
+    );
+    expect(doctorBody?.textContent).toContain("Wrapper Kind: cmd-wrapper");
+    expect(doctorBody?.textContent).toContain("Wrapper Fallback Retry: attempted");
+    expect(doctorBody?.textContent).toContain("HTTP_PROXY=http://127.0.0.1:7890");
+    expect(doctorBody?.textContent).toContain("HTTPS_PROXY=Not set");
   });
 
   it("updates the theme selection", async () => {
@@ -416,6 +495,102 @@ describe("SettingsView Display", () => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ notificationSoundId: "bell" }),
       );
+    });
+  });
+
+  it("auto applies network proxy when toggled on", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: { systemProxyEnabled: false, systemProxyUrl: null },
+    });
+    vi.mocked(pushErrorToast).mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Behavior" }));
+    const proxyCard = document.querySelector(".settings-basic-proxy-card") as HTMLElement | null;
+    if (!proxyCard) {
+      throw new Error("Expected network proxy card");
+    }
+    fireEvent.change(screen.getByLabelText("settings.behaviorProxyAddress"), {
+      target: { value: "http://127.0.0.1:7890" },
+    });
+    fireEvent.click(within(proxyCard).getByRole("switch"));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemProxyEnabled: true,
+          systemProxyUrl: "http://127.0.0.1:7890",
+        }),
+      );
+    });
+
+    expect(document.querySelector(".settings-basic-proxy-card.is-enabled")).toBeTruthy();
+    expect(document.querySelector(".settings-proxy-header-badge")).toBeTruthy();
+    expect(document.querySelectorAll(".settings-basic-proxy-card .proxy-status-badge")).toHaveLength(1);
+    expect(screen.getByRole("status").textContent ?? "").toContain(
+      "settings.behaviorProxyEnabledSuccess",
+    );
+  });
+
+  it("auto disables network proxy when toggled off", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: {
+        systemProxyEnabled: true,
+        systemProxyUrl: "http://127.0.0.1:7890",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Behavior" }));
+    const proxyCard = document.querySelector(".settings-basic-proxy-card") as HTMLElement | null;
+    if (!proxyCard) {
+      throw new Error("Expected network proxy card");
+    }
+
+    fireEvent.click(within(proxyCard).getByRole("switch"));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemProxyEnabled: false,
+          systemProxyUrl: "http://127.0.0.1:7890",
+        }),
+      );
+    });
+
+    expect(screen.getByRole("status").textContent ?? "").toContain(
+      "settings.behaviorProxyDisabledSuccess",
+    );
+  });
+
+  it("rolls back proxy toggle and shows failure feedback when auto apply fails", async () => {
+    const onUpdateAppSettings = vi.fn().mockRejectedValue(new Error("proxy apply failed"));
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: { systemProxyEnabled: false, systemProxyUrl: null },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Behavior" }));
+    const proxyCard = document.querySelector(".settings-basic-proxy-card") as HTMLElement | null;
+    if (!proxyCard) {
+      throw new Error("Expected network proxy card");
+    }
+
+    fireEvent.change(screen.getByLabelText("settings.behaviorProxyAddress"), {
+      target: { value: "http://127.0.0.1:7890" },
+    });
+    fireEvent.click(within(proxyCard).getByRole("switch"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent ?? "").toContain("proxy apply failed");
+    });
+
+    expect(within(proxyCard).getByRole("switch").getAttribute("aria-checked")).toBe("false");
+    expect(pushErrorToast).toHaveBeenCalledWith({
+      title: "common.error",
+      message: "proxy apply failed",
     });
   });
 });

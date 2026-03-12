@@ -8,6 +8,7 @@ import type {
   RateLimitSnapshot,
   CustomPromptOption,
   DebugEntry,
+  EngineType,
   ReviewTarget,
   WorkspaceInfo,
 } from "../../../types";
@@ -342,6 +343,16 @@ function mapNetworkErrorToUserMessage(
     message: stripBackendErrorPrefix(rawMessage),
     isNetwork: false,
   };
+}
+
+function resolveRecoverableCodexFirstPacketTimeout(
+  engine: EngineType,
+  rawMessage: string,
+): number | null {
+  if (engine !== "codex") {
+    return null;
+  }
+  return parseFirstPacketTimeoutSeconds(rawMessage);
 }
 
 type UseThreadMessagingOptions = {
@@ -1043,6 +1054,33 @@ export function useThreadMessaging({
         });
         const rpcError = extractRpcErrorMessage(response);
         if (rpcError) {
+          const firstPacketTimeoutSeconds =
+            resolveRecoverableCodexFirstPacketTimeout(resolvedEngine, rpcError);
+          if (firstPacketTimeoutSeconds) {
+            const warningMessage = t("threads.firstPacketTimeout", {
+              seconds: firstPacketTimeoutSeconds,
+            });
+            onDebug?.({
+              id: `${Date.now()}-client-turn-start-timeout-warning`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "turn/start delayed",
+              payload: {
+                threadId,
+                engine: resolvedEngine,
+                timeoutSeconds: firstPacketTimeoutSeconds,
+              },
+            });
+            pushErrorToast({
+              title: t("common.warning"),
+              message: warningMessage,
+              durationMs: 4800,
+            });
+            markProcessing(threadId, false);
+            setActiveTurnId(threadId, null);
+            safeMessageActivity();
+            return;
+          }
           const normalized = mapNetworkErrorToUserMessage(rpcError, t);
           markProcessing(threadId, false);
           setActiveTurnId(threadId, null);
@@ -1105,6 +1143,33 @@ export function useThreadMessaging({
           });
       } catch (error) {
         const rawMessage = error instanceof Error ? error.message : String(error);
+        const firstPacketTimeoutSeconds =
+          resolveRecoverableCodexFirstPacketTimeout(resolvedEngine, rawMessage);
+        if (firstPacketTimeoutSeconds) {
+          const warningMessage = t("threads.firstPacketTimeout", {
+            seconds: firstPacketTimeoutSeconds,
+          });
+          onDebug?.({
+            id: `${Date.now()}-client-turn-start-timeout-warning`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "turn/start delayed",
+            payload: {
+              threadId,
+              engine: resolvedEngine,
+              timeoutSeconds: firstPacketTimeoutSeconds,
+            },
+          });
+          pushErrorToast({
+            title: t("common.warning"),
+            message: warningMessage,
+            durationMs: 4800,
+          });
+          markProcessing(threadId, false);
+          setActiveTurnId(threadId, null);
+          safeMessageActivity();
+          return;
+        }
         const normalized = mapNetworkErrorToUserMessage(rawMessage, t);
         markProcessing(threadId, false);
         setActiveTurnId(threadId, null);

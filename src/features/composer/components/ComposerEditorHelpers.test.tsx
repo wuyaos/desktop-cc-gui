@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ComposerEditorSettings } from "../../../types";
 import { Composer } from "./Composer";
@@ -31,19 +32,35 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   }: {
     text: string;
     onTextChange: (next: string, cursor: number | null) => void;
-    onSend: () => void;
+    onSend: (submittedText?: string, submittedImages?: string[]) => void;
   }) => (
-    <textarea
-      value={text}
-      onChange={(event) =>
-        onTextChange(event.currentTarget.value, event.currentTarget.value.length)
-      }
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          onSend();
+    <>
+      <textarea
+        value={text}
+        onChange={(event) =>
+          onTextChange(event.currentTarget.value, event.currentTarget.value.length)
         }
-      }}
-    />
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            onSend(text);
+          }
+        }}
+      />
+      <button
+        type="button"
+        data-testid="submit-snapshot"
+        onClick={() => onSend("fresh child snapshot")}
+      >
+        Submit snapshot
+      </button>
+      <button
+        type="button"
+        data-testid="submit-snapshot-with-image"
+        onClick={() => onSend("fresh child snapshot", ["child-image.png"])}
+      >
+        Submit snapshot with image
+      </button>
+    </>
   ),
 }));
 
@@ -51,6 +68,7 @@ type HarnessProps = {
   initialText?: string;
   selectedEngine?: "claude" | "codex" | "opencode";
   commands?: { name: string; path: string; content: string }[];
+  attachedImages?: string[];
   onSend?: (text: string, images: string[], options?: { selectedMemoryIds?: string[] }) => void;
 };
 
@@ -58,6 +76,7 @@ function ComposerHarness({
   initialText = "",
   selectedEngine = "claude",
   commands = [],
+  attachedImages = [],
   onSend = () => {},
 }: HarnessProps) {
   const editorSettings: ComposerEditorSettings = {
@@ -99,6 +118,7 @@ function ComposerHarness({
       files={[]}
       draftText={initialText}
       onDraftChange={() => {}}
+      attachedImages={attachedImages}
       dictationEnabled={false}
       editorSettings={editorSettings}
       activeWorkspaceId="ws-1"
@@ -158,6 +178,63 @@ describe("Composer editor helpers", () => {
     });
 
     expect(onSend).toHaveBeenCalledWith("/export", []);
+    harness.unmount();
+  });
+
+  it("prefers submitted child snapshot over stale composer text state", async () => {
+    const onSend = vi.fn();
+    const harness = renderComposerHarness({ onSend });
+    const button = harness.container.querySelector(
+      '[data-testid="submit-snapshot"]',
+    ) as HTMLButtonElement | null;
+    if (!button) {
+      throw new Error("Submit snapshot button not found");
+    }
+
+    await act(async () => {
+      button.click();
+    });
+
+    expect(onSend).toHaveBeenCalledWith("fresh child snapshot", [], undefined);
+    harness.unmount();
+  });
+
+  it("uses the latest keyboard-enter snapshot from the child input", async () => {
+    const onSend = vi.fn();
+    const harness = renderComposerHarness({ onSend });
+    const textarea = getTextarea(harness.container);
+
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "latest enter snapshot" } });
+      fireEvent.keyDown(textarea, { key: "Enter" });
+    });
+
+    expect(onSend).toHaveBeenCalledWith("latest enter snapshot", [], undefined);
+    harness.unmount();
+  });
+
+  it("merges composer images with submitted child snapshot images", async () => {
+    const onSend = vi.fn();
+    const harness = renderComposerHarness({
+      onSend,
+      attachedImages: ["persisted-image.png"],
+    });
+    const button = harness.container.querySelector(
+      '[data-testid="submit-snapshot-with-image"]',
+    ) as HTMLButtonElement | null;
+    if (!button) {
+      throw new Error("Submit snapshot with image button not found");
+    }
+
+    await act(async () => {
+      button.click();
+    });
+
+    expect(onSend).toHaveBeenCalledWith(
+      "fresh child snapshot",
+      ["persisted-image.png", "child-image.png"],
+      undefined,
+    );
     harness.unmount();
   });
 

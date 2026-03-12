@@ -506,9 +506,6 @@ mod tests {
             mapped.message["params"]["threadId"],
             Value::String("thread-1".to_string())
         );
-        assert_eq!(
-            mapped.message["params"]["argv"],
-            json!(["git", "status"])
-        );
+        assert_eq!(mapped.message["params"]["argv"], json!(["git", "status"]));
     }
 }

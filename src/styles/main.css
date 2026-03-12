@@ -445,7 +445,7 @@ body[data-panel-resizing="true"] .main {
   );
 }
 
-.app.macos-desktop.sidebar-collapsed.right-panel-collapsed .main-topbar {
+.app.macos-desktop.sidebar-collapsed .main-topbar {
   padding-left: calc(
     var(--main-panel-padding)
     + var(--titlebar-inset-left, 72px)

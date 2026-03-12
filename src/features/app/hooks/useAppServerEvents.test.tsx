@@ -228,6 +228,24 @@ describe("useAppServerEvents", () => {
       listener?.({
         workspace_id: "ws-1",
         message: {
+          method: "turn/error",
+          params: {
+            threadId: "thread-2",
+            turnId: null,
+            error: { message: "Late start failed", lateResponse: true },
+          },
+        },
+      });
+    });
+    expect(handlers.onTurnError).toHaveBeenCalledWith("ws-1", "thread-2", "", {
+      message: "Late start failed",
+      willRetry: false,
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
           method: "codex/parseError",
           params: {
             threadId: "thread-2",

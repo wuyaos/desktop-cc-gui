@@ -909,7 +909,7 @@ export const Composer = memo(function Composer({
     void onSend(command, []);
   }, [disabled, isReviewQuickActionEngine, onSend, selectedEngine]);
 
-  const handleSend = useCallback((submittedImages?: string[]) => {
+  const handleSend = useCallback((submittedText?: string, submittedImages?: string[]) => {
     if (disabled) {
       return;
     }
@@ -920,7 +920,7 @@ export const Composer = memo(function Composer({
       });
       return;
     }
-    const trimmed = text.trim();
+    const trimmed = (submittedText ?? text).trim();
     // Merge images from Composer state (file picker) and ChatInputBox (paste/drop)
     const mergedImages = Array.from(
       new Set([...attachedImages, ...(submittedImages ?? [])]),

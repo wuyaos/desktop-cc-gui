@@ -69,6 +69,8 @@ type SidebarProps = {
   threadListCursorByWorkspace: Record<string, string | null>;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
+  systemProxyEnabled?: boolean;
+  systemProxyUrl?: string | null;
   accountRateLimits: RateLimitSnapshot | null;
   usageShowRemaining: boolean;
   accountInfo: AccountSnapshot | null;
@@ -143,6 +145,8 @@ export function Sidebar({
   threadListCursorByWorkspace,
   activeWorkspaceId,
   activeThreadId,
+  systemProxyEnabled = false,
+  systemProxyUrl = null,
   accountInfo: _accountInfo,
   onSwitchAccount: _onSwitchAccount,
   onCancelSwitchAccount: _onCancelSwitchAccount,
@@ -701,6 +705,8 @@ export function Sidebar({
             expandedWorkspaces={expandedWorkspaces}
             activeWorkspaceId={activeWorkspaceId}
             activeThreadId={activeThreadId}
+            systemProxyEnabled={systemProxyEnabled}
+            systemProxyUrl={systemProxyUrl}
             getThreadRows={getThreadRows}
             getThreadTime={getThreadTime}
             isThreadPinned={isThreadPinned}
@@ -732,6 +738,8 @@ export function Sidebar({
             isPaging={isPaging}
             activeWorkspaceId={activeWorkspaceId}
             activeThreadId={activeThreadId}
+            systemProxyEnabled={systemProxyEnabled}
+            systemProxyUrl={systemProxyUrl}
             threadStatusById={threadStatusById}
             getThreadTime={getThreadTime}
             isThreadPinned={isThreadPinned}
@@ -912,6 +920,8 @@ export function Sidebar({
                   rows={pinnedThreadRows}
                   activeWorkspaceId={activeWorkspaceId}
                   activeThreadId={activeThreadId}
+                  systemProxyEnabled={systemProxyEnabled}
+                  systemProxyUrl={systemProxyUrl}
                   threadStatusById={threadStatusById}
                   getThreadTime={getThreadTime}
                   isThreadPinned={isThreadPinned}

@@ -33,6 +33,8 @@ type WorktreeSectionProps = {
   expandedWorkspaces: Set<string>;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
+  systemProxyEnabled?: boolean;
+  systemProxyUrl?: string | null;
   getThreadRows: (
     threads: ThreadSummary[],
     isExpanded: boolean,
@@ -77,6 +79,8 @@ export function WorktreeSection({
   expandedWorkspaces,
   activeWorkspaceId,
   activeThreadId,
+  systemProxyEnabled = false,
+  systemProxyUrl = null,
   getThreadRows,
   getThreadTime,
   isThreadPinned,
@@ -205,6 +209,8 @@ export function WorktreeSection({
                     showLoadOlder={false}
                     activeWorkspaceId={activeWorkspaceId}
                     activeThreadId={activeThreadId}
+                    systemProxyEnabled={systemProxyEnabled}
+                    systemProxyUrl={systemProxyUrl}
                     threadStatusById={threadStatusById}
                     getThreadTime={getThreadTime}
                     isThreadPinned={isThreadPinned}

@@ -187,6 +187,56 @@ describe("GitDiffPanel", () => {
     expect(badge).toBeTruthy();
   });
 
+  it("renders compact tree summary in single-section tree mode", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView="tree"
+        gitRoot="/repo/src"
+        totalAdditions={1}
+        totalDeletions={1}
+        unstagedFiles={[{ path: "src/main.css", status: "M", additions: 1, deletions: 1 }]}
+      />,
+    );
+
+    expect(document.querySelector(".git-filetree-section-header.is-compact")).toBeTruthy();
+    expect(screen.getAllByText("src").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Unstaged (1)")).toBeTruthy();
+  });
+
+  it("keeps staged and unstaged tree sections visually consistent", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView="tree"
+        gitRoot="/repo/codex-2026-03-12-v0.2.7"
+        totalAdditions={12}
+        totalDeletions={3}
+        stagedFiles={[{ path: "src/staged.ts", status: "M", additions: 8, deletions: 1 }]}
+        unstagedFiles={[{ path: "src/unstaged.ts", status: "M", additions: 4, deletions: 2 }]}
+      />,
+    );
+
+    expect(document.querySelectorAll(".git-filetree-section-header.is-compact")).toHaveLength(2);
+    expect(screen.getAllByText("codex-2026-03-12-v0.2.7").length).toBeGreaterThan(1);
+  });
+
+  it("renders compact flat summary in single-section flat mode", () => {
+    render(
+      <GitDiffPanel
+        {...baseProps}
+        gitDiffListView="flat"
+        totalAdditions={302}
+        totalDeletions={10}
+        stagedFiles={[{ path: "src/main.css", status: "M", additions: 302, deletions: 10 }]}
+      />,
+    );
+
+    expect(document.querySelector(".git-filetree-section-header.is-compact")).toBeTruthy();
+    expect(screen.queryByText("1 file changed")).toBeNull();
+    expect(screen.getByLabelText("Staged (1)")).toBeTruthy();
+  });
+
   it("toggles list view via shortcut when panel is focused", () => {
     const onGitDiffListViewChange = vi.fn();
     render(

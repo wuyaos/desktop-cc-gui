@@ -11,9 +11,11 @@ import { useTranslation } from "react-i18next";
 import Check from "lucide-react/dist/esm/icons/check";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import CircleCheckBig from "lucide-react/dist/esm/icons/circle-check-big";
 import Minus from "lucide-react/dist/esm/icons/minus";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles";
+import SquarePen from "lucide-react/dist/esm/icons/square-pen";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
 import FileIcon from "../../../components/FileIcon";
 import {
@@ -168,6 +170,25 @@ function normalizeErrorMessage(
     return t("git.commitMessageRequiresCodex");
   }
   return localized;
+}
+
+function renderSectionIndicator(
+  section: DiffSection,
+  count: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  const label = section === "staged" ? t("git.staged") : t("git.unstaged");
+  const Icon = section === "staged" ? CircleCheckBig : SquarePen;
+  return (
+    <span
+      className={`git-history-worktree-section-indicator is-${section}`}
+      aria-label={`${label} (${count})`}
+      title={label}
+    >
+      <Icon size={12} aria-hidden />
+      <strong>{count}</strong>
+    </span>
+  );
 }
 
 export function GitHistoryWorktreePanel({
@@ -381,6 +402,20 @@ export function GitHistoryWorktreePanel({
   const worktreeSectionsClassName = `git-history-worktree-sections${
     hasStagedFiles !== hasUnstagedFiles ? " is-single" : ""
   }`;
+  const visibleSectionCount = Number(hasStagedFiles) + Number(hasUnstagedFiles);
+  const compactSection =
+    visibleSectionCount === 1
+      ? hasStagedFiles
+        ? "staged"
+        : "unstaged"
+      : null;
+  const compactSummaryLabel =
+    compactSection === "staged"
+      ? renderSectionIndicator("staged", stagedFiles.length, t)
+      : compactSection === "unstaged"
+        ? renderSectionIndicator("unstaged", unstagedFiles.length, t)
+        : null;
+  const compactSummaryBranch = status.branchName || resolvedRootFolderName;
 
   const toggleFolder = useCallback((key: string) => {
     setCollapsedFolders((prev) => {
@@ -664,12 +699,79 @@ export function GitHistoryWorktreePanel({
 
       {shouldShowFileSections ? (
         <div className={worktreeSectionsClassName}>
+          {compactSection && compactSummaryLabel ? (
+            <div className="git-history-worktree-summary-bar">
+              <span
+                className="git-history-worktree-summary-lines"
+                aria-label={`+${status.totalAdditions} -${status.totalDeletions}`}
+              >
+                <span className="git-history-diff-add">+{status.totalAdditions}</span>
+                <span className="git-history-diff-sep" aria-hidden>
+                  /
+                </span>
+                <span className="git-history-diff-del">-{status.totalDeletions}</span>
+              </span>
+              <span className="git-history-worktree-summary-branch" title={compactSummaryBranch}>
+                <strong>{compactSummaryBranch}</strong>
+              </span>
+              <span className="git-history-worktree-summary-label">{compactSummaryLabel}</span>
+              <div className="git-history-worktree-summary-actions" role="group" aria-label={t("git.fileActions")}>
+                {compactSection === "staged" ? (
+                  <button
+                    type="button"
+                    className="git-history-worktree-action git-history-worktree-action-unstage diff-row-action diff-row-action--unstage"
+                    onClick={() => {
+                      void handleMutation(async () => {
+                        for (const file of stagedFiles) {
+                          await unstageGitFile(workspaceId, file.path);
+                        }
+                      });
+                    }}
+                    disabled={operationLoading}
+                    title={t("git.unstageAllChangesAction")}
+                    aria-label={t("git.unstageAllChangesAction")}
+                  >
+                    <Minus size={12} aria-hidden />
+                  </button>
+                ) : null}
+                {compactSection === "unstaged" ? (
+                  <>
+                    <button
+                      type="button"
+                      className="git-history-worktree-action git-history-worktree-action-stage diff-row-action diff-row-action--stage"
+                      onClick={() => {
+                        void handleMutation(() => stageGitAll(workspaceId));
+                      }}
+                      disabled={operationLoading}
+                      title={t("git.stageAllChangesAction")}
+                      aria-label={t("git.stageAllChangesAction")}
+                    >
+                      <Plus size={12} aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      className="git-history-worktree-action git-history-worktree-action-discard diff-row-action diff-row-action--discard"
+                      onClick={() => {
+                        handleDiscardAll();
+                      }}
+                      disabled={operationLoading}
+                      title={t("git.discardAllChangesAction")}
+                      aria-label={t("git.discardAllChangesAction")}
+                    >
+                      <Undo2 size={12} aria-hidden />
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {hasStagedFiles ? (
             <div className="git-history-worktree-section git-filetree-section">
-              <div className="git-history-worktree-section-header git-filetree-section-header">
-                <span>
-                  {t("git.staged")} ({stagedFiles.length})
-                </span>
+              <div
+                className="git-history-worktree-section-header git-filetree-section-header"
+                hidden={compactSection === "staged"}
+              >
+                <span>{renderSectionIndicator("staged", stagedFiles.length, t)}</span>
                 <div className="git-history-worktree-section-actions git-filetree-section-actions">
                   <button
                     type="button"
@@ -697,10 +799,11 @@ export function GitHistoryWorktreePanel({
 
           {hasUnstagedFiles ? (
             <div className="git-history-worktree-section git-filetree-section">
-              <div className="git-history-worktree-section-header git-filetree-section-header">
-                <span>
-                  {t("git.unstaged")} ({unstagedFiles.length})
-                </span>
+              <div
+                className="git-history-worktree-section-header git-filetree-section-header"
+                hidden={compactSection === "unstaged"}
+              >
+                <span>{renderSectionIndicator("unstaged", unstagedFiles.length, t)}</span>
                 <div className="git-history-worktree-section-actions git-filetree-section-actions">
                   <button
                     type="button"

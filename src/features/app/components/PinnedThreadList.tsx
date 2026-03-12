@@ -12,6 +12,7 @@ import type { CSSProperties, MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ThreadSummary } from "../../../types";
+import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { ThreadDeleteConfirmBubble } from "../../threads/components/ThreadDeleteConfirmBubble";
 
@@ -30,6 +31,8 @@ type PinnedThreadListProps = {
   rows: PinnedThreadRow[];
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
+  systemProxyEnabled?: boolean;
+  systemProxyUrl?: string | null;
   threadStatusById: ThreadStatusMap;
   getThreadTime: (thread: ThreadSummary) => string | null;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
@@ -52,6 +55,8 @@ export function PinnedThreadList({
   rows,
   activeWorkspaceId,
   activeThreadId,
+  systemProxyEnabled = false,
+  systemProxyUrl = null,
   threadStatusById,
   getThreadTime,
   isThreadPinned,
@@ -86,6 +91,10 @@ export function PinnedThreadList({
         const canPin = depth === 0;
         const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
         const isAutoNaming = isThreadAutoNaming(workspaceId, thread.id);
+        const showProxyBadge =
+          systemProxyEnabled &&
+          workspaceId === activeWorkspaceId &&
+          thread.id === activeThreadId;
         const engineSource = thread.engineSource ?? "codex";
         const engineTitle =
           engineSource === "claude"
@@ -137,6 +146,14 @@ export function PinnedThreadList({
                   >
                     <EngineIcon engine={engineSource} size={12} />
                   </span>
+                  {showProxyBadge && (
+                    <ProxyStatusBadge
+                      proxyUrl={systemProxyUrl}
+                      label={t("threads.proxyBadge")}
+                      variant="compact"
+                      className="thread-proxy-badge"
+                    />
+                  )}
                   <span className="thread-name">{thread.name}</span>
                   <div className="thread-meta">
                     {isAutoNaming && (

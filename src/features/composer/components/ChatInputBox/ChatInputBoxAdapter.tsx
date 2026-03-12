@@ -93,7 +93,7 @@ export interface ChatInputBoxAdapterProps {
   canStop: boolean;
 
   // Callbacks
-  onSend: (submittedImages?: string[]) => void;
+  onSend: (submittedText?: string, submittedImages?: string[]) => void;
   onStop: () => void;
   onTextChange: (text: string, selectionStart: number | null) => void;
 
@@ -436,8 +436,8 @@ export const ChatInputBoxAdapter = forwardRef<ChatInputBoxHandle, ChatInputBoxAd
     }, [onTextChange]);
 
     // Handle submit from ChatInputBox
-    const handleSubmit = useCallback((_content: string, submittedAttachments?: Attachment[]) => {
-      onSend(attachmentsToImageInputs(submittedAttachments));
+    const handleSubmit = useCallback((submittedText: string, submittedAttachments?: Attachment[]) => {
+      onSend(submittedText, attachmentsToImageInputs(submittedAttachments));
     }, [onSend]);
 
     // Handle attachment removal (convert Attachment id back to path)

@@ -679,7 +679,7 @@
 }
 
 .diff-viewer-output {
-  background: var(--surface-command);
+  background: var(--diff-surface-bg, var(--surface-command));
   border-radius: 8px;
   padding: 8px;
   font-size: var(--code-font-size, 11px);
@@ -697,14 +697,15 @@
   --diffs-font-size: var(--code-font-size, 11px);
   --diffs-line-height: var(--code-line-height, 1.28);
   --diffs-tab-size: 2;
-  --diff-line-add-bg: color-mix(in srgb, #3fb950 20%, var(--surface-command));
-  --diff-line-del-bg: color-mix(in srgb, #f85149 18%, var(--surface-command));
+  --diff-surface-bg: var(--surface-command);
+  --diff-line-add-bg: color-mix(in srgb, #3fb950 20%, var(--diff-surface-bg));
+  --diff-line-del-bg: color-mix(in srgb, #f85149 18%, var(--diff-surface-bg));
   --diff-line-add-text: var(--text-stronger);
   --diff-line-del-text: var(--text-stronger);
   --diff-line-add-gutter: color-mix(in srgb, #3fb950 45%, var(--text-faint));
   --diff-line-del-gutter: color-mix(in srgb, #f85149 45%, var(--text-faint));
-  --diff-split-pane-old-bg: color-mix(in srgb, #f85149 7%, var(--surface-command));
-  --diff-split-pane-new-bg: color-mix(in srgb, #3fb950 8%, var(--surface-command));
+  --diff-split-pane-old-bg: var(--diff-surface-bg);
+  --diff-split-pane-new-bg: var(--diff-surface-bg);
   --diff-split-empty-bg: color-mix(in srgb, var(--surface-active) 40%, transparent);
   --diff-split-divider: color-mix(in srgb, var(--border-subtle) 82%, transparent);
   --diff-token-comment: var(--text-accent);
@@ -718,7 +719,7 @@
 }
 
 .diff-viewer-output-flat {
-  background: color-mix(in srgb, var(--surface-command) 95%, transparent);
+  background: var(--diff-surface-bg, var(--surface-command));
   border-radius: 0;
   padding: 0;
   box-shadow: none;
@@ -975,14 +976,15 @@
 }
 
 :root[data-theme="light"] .diff-viewer-output {
-  --diff-line-add-bg: color-mix(in srgb, #16a34a 21%, var(--surface-command));
-  --diff-line-del-bg: color-mix(in srgb, #dc2626 18%, var(--surface-command));
+  --diff-surface-bg: #ffffff;
+  --diff-line-add-bg: color-mix(in srgb, #16a34a 16%, var(--diff-surface-bg));
+  --diff-line-del-bg: color-mix(in srgb, #dc2626 14%, var(--diff-surface-bg));
   --diff-line-add-text: rgba(10, 43, 26, 0.96);
   --diff-line-del-text: rgba(66, 18, 18, 0.96);
   --diff-line-add-gutter: rgba(18, 116, 53, 0.82);
   --diff-line-del-gutter: rgba(165, 38, 38, 0.82);
-  --diff-split-pane-old-bg: color-mix(in srgb, #dc2626 9%, var(--surface-command));
-  --diff-split-pane-new-bg: color-mix(in srgb, #16a34a 10%, var(--surface-command));
+  --diff-split-pane-old-bg: var(--diff-surface-bg);
+  --diff-split-pane-new-bg: var(--diff-surface-bg);
   --diff-split-empty-bg: rgba(164, 184, 212, 0.24);
   --diff-split-divider: rgba(15, 23, 36, 0.18);
   --diff-token-comment: rgba(58, 93, 149, 0.9);
@@ -996,14 +998,15 @@
 }
 
 :root[data-theme="dark"] .diff-viewer-output {
-  --diff-line-add-bg: color-mix(in srgb, #2ea043 32%, var(--surface-command));
-  --diff-line-del-bg: color-mix(in srgb, #da3633 28%, var(--surface-command));
+  --diff-surface-bg: #0c0e14;
+  --diff-line-add-bg: color-mix(in srgb, #2ea043 32%, var(--diff-surface-bg));
+  --diff-line-del-bg: color-mix(in srgb, #da3633 28%, var(--diff-surface-bg));
   --diff-line-add-text: rgba(229, 255, 238, 0.96);
   --diff-line-del-text: rgba(255, 228, 228, 0.95);
   --diff-line-add-gutter: rgba(124, 237, 167, 0.9);
   --diff-line-del-gutter: rgba(255, 144, 144, 0.9);
-  --diff-split-pane-old-bg: color-mix(in srgb, #da3633 12%, var(--surface-command));
-  --diff-split-pane-new-bg: color-mix(in srgb, #2ea043 13%, var(--surface-command));
+  --diff-split-pane-old-bg: var(--diff-surface-bg);
+  --diff-split-pane-new-bg: var(--diff-surface-bg);
   --diff-split-empty-bg: rgba(72, 94, 128, 0.28);
   --diff-split-divider: rgba(66, 73, 95, 0.84);
   --diff-token-comment: var(--text-accent);
@@ -1018,14 +1021,15 @@
 
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] .diff-viewer-output {
-    --diff-line-add-bg: color-mix(in srgb, #16a34a 21%, var(--surface-command));
-    --diff-line-del-bg: color-mix(in srgb, #dc2626 18%, var(--surface-command));
+    --diff-surface-bg: #ffffff;
+    --diff-line-add-bg: color-mix(in srgb, #16a34a 16%, var(--diff-surface-bg));
+    --diff-line-del-bg: color-mix(in srgb, #dc2626 14%, var(--diff-surface-bg));
     --diff-line-add-text: rgba(10, 43, 26, 0.96);
     --diff-line-del-text: rgba(66, 18, 18, 0.96);
     --diff-line-add-gutter: rgba(18, 116, 53, 0.82);
     --diff-line-del-gutter: rgba(165, 38, 38, 0.82);
-    --diff-split-pane-old-bg: color-mix(in srgb, #dc2626 9%, var(--surface-command));
-    --diff-split-pane-new-bg: color-mix(in srgb, #16a34a 10%, var(--surface-command));
+    --diff-split-pane-old-bg: var(--diff-surface-bg);
+    --diff-split-pane-new-bg: var(--diff-surface-bg);
     --diff-split-empty-bg: rgba(164, 184, 212, 0.24);
     --diff-split-divider: rgba(15, 23, 36, 0.18);
     --diff-token-comment: rgba(58, 93, 149, 0.9);
@@ -1041,14 +1045,15 @@
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] .diff-viewer-output {
-    --diff-line-add-bg: color-mix(in srgb, #2ea043 32%, var(--surface-command));
-    --diff-line-del-bg: color-mix(in srgb, #da3633 28%, var(--surface-command));
+    --diff-surface-bg: #0c0e14;
+    --diff-line-add-bg: color-mix(in srgb, #2ea043 32%, var(--diff-surface-bg));
+    --diff-line-del-bg: color-mix(in srgb, #da3633 28%, var(--diff-surface-bg));
     --diff-line-add-text: rgba(229, 255, 238, 0.96);
     --diff-line-del-text: rgba(255, 228, 228, 0.95);
     --diff-line-add-gutter: rgba(124, 237, 167, 0.9);
     --diff-line-del-gutter: rgba(255, 144, 144, 0.9);
-    --diff-split-pane-old-bg: color-mix(in srgb, #da3633 12%, var(--surface-command));
-    --diff-split-pane-new-bg: color-mix(in srgb, #2ea043 13%, var(--surface-command));
+    --diff-split-pane-old-bg: var(--diff-surface-bg);
+    --diff-split-pane-new-bg: var(--diff-surface-bg);
     --diff-split-empty-bg: rgba(72, 94, 128, 0.28);
     --diff-split-divider: rgba(66, 73, 95, 0.84);
     --diff-token-comment: var(--text-accent);

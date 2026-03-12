@@ -130,4 +130,20 @@ describe("PinnedThreadList", () => {
 
     expect(screen.getByText("Auto naming...")).toBeTruthy();
   });
+
+  it("shows a compact proxy badge on the active pinned row when proxy is enabled", () => {
+    const { container } = render(
+      <PinnedThreadList
+        {...baseProps}
+        systemProxyEnabled
+        systemProxyUrl="http://127.0.0.1:7890"
+      />,
+    );
+
+    const row = container.querySelector(".thread-row.active");
+    const badge = row?.querySelector(".thread-proxy-badge");
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent ?? "").toBe("");
+    expect(badge?.classList.contains("proxy-status-badge--animated")).toBe(false);
+  });
 });

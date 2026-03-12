@@ -107,6 +107,55 @@ async fn resolve_entry_and_parent(
     Ok((entry, parent_entry))
 }
 
+pub(crate) async fn restart_all_connected_sessions_core<F, Fut>(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    app_settings: &Mutex<AppSettings>,
+    spawn_session: F,
+) -> Result<(), String>
+where
+    F: Fn(WorkspaceEntry, Option<String>, Option<String>, Option<PathBuf>) -> Fut + Copy,
+    Fut: Future<Output = Result<Arc<WorkspaceSession>, String>>,
+{
+    let entries = {
+        let workspaces = workspaces.lock().await;
+        let sessions = sessions.lock().await;
+        workspaces
+            .values()
+            .filter(|entry| sessions.contains_key(&entry.id))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    if entries.is_empty() {
+        return Ok(());
+    }
+
+    let app_settings_snapshot = app_settings.lock().await.clone();
+    for entry in entries {
+        let parent_entry = {
+            let workspaces = workspaces.lock().await;
+            entry
+                .parent_id
+                .as_ref()
+                .and_then(|parent_id| workspaces.get(parent_id))
+                .cloned()
+        };
+        let default_bin = app_settings_snapshot.codex_bin.clone();
+        let codex_args = resolve_workspace_codex_args(
+            &entry,
+            parent_entry.as_ref(),
+            Some(&app_settings_snapshot),
+        );
+        let codex_home = resolve_workspace_codex_home(&entry, parent_entry.as_ref());
+        let new_session = spawn_session(entry.clone(), default_bin, codex_args, codex_home).await?;
+        if let Some(old_session) = sessions.lock().await.insert(entry.id.clone(), new_session) {
+            let mut child = old_session.child.lock().await;
+            let _ = child.kill().await;
+        }
+    }
+    Ok(())
+}
+
 async fn resolve_workspace_root(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: &str,

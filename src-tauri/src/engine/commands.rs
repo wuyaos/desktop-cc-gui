@@ -2617,9 +2617,7 @@ pub async fn engine_send_message(
                     session.get_session_id().await
                 }
             } else {
-                Some(
-                    session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
-                )
+                Some(session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
             };
 
             let sanitized_model = model

@@ -42,6 +42,7 @@ const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 300;
 const DEFAULT_INITIAL_TURN_START_TIMEOUT_MS: u64 = 120_000;
 const MIN_INITIAL_TURN_START_TIMEOUT_MS: u64 = 30_000;
 const MAX_INITIAL_TURN_START_TIMEOUT_MS: u64 = 240_000;
+const TIMED_OUT_REQUEST_GRACE_MS: u64 = 180_000;
 const AUTO_COMPACTION_METHOD_CANDIDATES: [&str; 3] = [
     "thread/compact/start",
     "thread/compactStart",
@@ -74,6 +75,13 @@ struct AutoCompactionThreadState {
 struct AutoCompactionTrigger {
     thread_id: String,
     usage_percent: f64,
+}
+
+#[derive(Debug, Clone)]
+struct TimedOutRequest {
+    method: String,
+    thread_id: Option<String>,
+    timed_out_at_ms: u64,
 }
 
 fn now_millis() -> u64 {
@@ -115,6 +123,16 @@ fn extract_thread_id(value: &Value) -> Option<String> {
 
 fn extract_event_method(value: &Value) -> Option<&str> {
     value.get("method").and_then(Value::as_str)
+}
+
+fn extract_request_thread_id(params: &Value) -> Option<String> {
+    params
+        .get("threadId")
+        .or_else(|| params.get("thread_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn read_number_field(obj: &Value, keys: &[&str]) -> Option<f64> {
@@ -231,6 +249,103 @@ fn build_thread_compaction_failed_event(thread_id: &str, reason: &str) -> Value 
             "reason": reason
         }
     })
+}
+
+fn build_late_turn_started_event(value: &Value) -> Option<Value> {
+    let turn = value
+        .get("result")
+        .and_then(|result| result.get("turn"))
+        .or_else(|| value.get("turn"))?;
+    let thread_id = turn
+        .get("threadId")
+        .or_else(|| turn.get("thread_id"))
+        .and_then(Value::as_str)?
+        .trim()
+        .to_string();
+    if thread_id.is_empty() {
+        return None;
+    }
+    let turn_id = turn
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    Some(json!({
+        "method": "turn/started",
+        "params": {
+            "threadId": thread_id,
+            "thread_id": thread_id,
+            "turnId": turn_id,
+            "turn_id": turn_id,
+            "turn": turn.clone(),
+            "lateResponse": true,
+            "late_response": true,
+        }
+    }))
+}
+
+fn extract_response_error_payload(value: &Value) -> Option<Value> {
+    value
+        .get("error")
+        .cloned()
+        .or_else(|| value.get("result").and_then(|result| result.get("error")).cloned())
+}
+
+fn build_late_turn_error_event(value: &Value, request: &TimedOutRequest) -> Option<Value> {
+    let thread_id = request.thread_id.as_deref()?.trim();
+    if thread_id.is_empty() {
+        return None;
+    }
+
+    let late_error = match extract_response_error_payload(value) {
+        Some(Value::Object(object)) => {
+            let mut payload = object.clone();
+            let message_missing = payload
+                .get("message")
+                .and_then(Value::as_str)
+                .map(|message| message.trim().is_empty())
+                .unwrap_or(true);
+            if message_missing {
+                payload.insert(
+                    "message".to_string(),
+                    Value::String("Turn failed to start".to_string()),
+                );
+            }
+            payload.insert("lateResponse".to_string(), Value::Bool(true));
+            payload.insert("late_response".to_string(), Value::Bool(true));
+            Value::Object(payload)
+        }
+        Some(Value::String(message)) => json!({
+            "message": message,
+            "lateResponse": true,
+            "late_response": true,
+        }),
+        Some(other) => json!({
+            "message": other.to_string(),
+            "lateResponse": true,
+            "late_response": true,
+        }),
+        None => json!({
+            "message": "Turn failed to start",
+            "lateResponse": true,
+            "late_response": true,
+        }),
+    };
+
+    Some(json!({
+        "method": "turn/error",
+        "params": {
+            "threadId": thread_id,
+            "thread_id": thread_id,
+            "turnId": Value::Null,
+            "turn_id": Value::Null,
+            "error": late_error,
+            "willRetry": false,
+            "will_retry": false,
+            "lateResponse": true,
+            "late_response": true,
+        }
+    }))
 }
 
 fn response_error_message(value: &Value) -> Option<String> {
@@ -1033,6 +1148,7 @@ pub(crate) struct WorkspaceSession {
     pub(crate) child: Mutex<Child>,
     pub(crate) stdin: Mutex<ChildStdin>,
     pub(crate) pending: Mutex<HashMap<u64, oneshot::Sender<Value>>>,
+    timed_out_requests: Mutex<HashMap<u64, TimedOutRequest>>,
     pub(crate) next_id: AtomicU64,
     /// Callbacks for background threads - events for these threadIds are sent through the channel
     pub(crate) background_thread_callbacks: Mutex<HashMap<String, mpsc::UnboundedSender<Value>>>,
@@ -1046,6 +1162,31 @@ pub(crate) struct WorkspaceSession {
 }
 
 impl WorkspaceSession {
+    async fn record_timed_out_request(&self, id: u64, method: &str, thread_id: Option<String>) {
+        let now = now_millis();
+        let mut timed_out_requests = self.timed_out_requests.lock().await;
+        timed_out_requests.retain(|_, request| {
+            now.saturating_sub(request.timed_out_at_ms) <= TIMED_OUT_REQUEST_GRACE_MS
+        });
+        timed_out_requests.insert(
+            id,
+            TimedOutRequest {
+                method: method.to_string(),
+                thread_id,
+                timed_out_at_ms: now,
+            },
+        );
+    }
+
+    async fn take_timed_out_request(&self, id: u64) -> Option<TimedOutRequest> {
+        let now = now_millis();
+        let mut timed_out_requests = self.timed_out_requests.lock().await;
+        timed_out_requests.retain(|_, request| {
+            now.saturating_sub(request.timed_out_at_ms) <= TIMED_OUT_REQUEST_GRACE_MS
+        });
+        timed_out_requests.remove(&id)
+    }
+
     async fn write_message(&self, value: Value) -> Result<(), String> {
         let mut stdin = self.stdin.lock().await;
         let mut line = serde_json::to_string(&value).map_err(|e| e.to_string())?;
@@ -1086,6 +1227,8 @@ impl WorkspaceSession {
             }
             Err(_) => {
                 self.pending.lock().await.remove(&id);
+                self.record_timed_out_request(id, method, extract_request_thread_id(&params))
+                    .await;
                 Err("request timed out".to_string())
             }
         }
@@ -1846,15 +1989,97 @@ pub(crate) fn build_codex_path_env(codex_bin: Option<&str>) -> Option<String> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct CodexLaunchContext {
+    pub(crate) resolved_bin: String,
+    pub(crate) wrapper_kind: &'static str,
+    pub(crate) path_env: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CodexAppServerProbeStatus {
+    pub(crate) ok: bool,
+    pub(crate) status: String,
+    pub(crate) details: Option<String>,
+    pub(crate) fallback_retried: bool,
+}
+
+fn resolve_codex_binary(codex_bin: Option<&str>) -> String {
+    if let Some(custom) = codex_bin {
+        let trimmed = custom.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    find_cli_binary("codex", None)
+        .or_else(|| find_cli_binary("claude", None))
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_else(|| "codex".to_string())
+}
+
+pub(crate) fn resolve_codex_launch_context(codex_bin: Option<&str>) -> CodexLaunchContext {
+    let resolved_bin = resolve_codex_binary(codex_bin);
+    CodexLaunchContext {
+        wrapper_kind: wrapper_kind_for_binary(&resolved_bin),
+        path_env: build_codex_path_env(codex_bin),
+        resolved_bin,
+    }
+}
+
+pub(crate) fn wrapper_kind_for_binary(bin: &str) -> &'static str {
+    let normalized = bin.trim().to_ascii_lowercase();
+    if normalized.ends_with(".cmd") {
+        "cmd-wrapper"
+    } else if normalized.ends_with(".bat") {
+        "bat-wrapper"
+    } else {
+        "direct"
+    }
+}
+
+#[cfg(windows)]
+fn proxy_env_snapshot() -> serde_json::Map<String, Value> {
+    [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+    ]
+    .into_iter()
+    .map(|key| (key.to_string(), json!(env::var(key).ok())))
+    .collect()
+}
+
+#[cfg(not(windows))]
+fn proxy_env_snapshot() -> serde_json::Map<String, Value> {
+    serde_json::Map::new()
+}
+
 /// Get debug information for CLI detection (useful for troubleshooting on Windows)
 pub fn get_cli_debug_info(custom_bin: Option<&str>) -> serde_json::Value {
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     let mut debug = serde_json::Map::new();
+    let launch_context = resolve_codex_launch_context(custom_bin);
 
     // Platform info
     debug.insert("platform".to_string(), json!(std::env::consts::OS));
     debug.insert("arch".to_string(), json!(std::env::consts::ARCH));
+    debug.insert(
+        "resolvedBinaryPath".to_string(),
+        json!(launch_context.resolved_bin),
+    );
+    debug.insert("wrapperKind".to_string(), json!(launch_context.wrapper_kind));
+    debug.insert("pathEnvUsed".to_string(), json!(launch_context.path_env));
+    debug.insert(
+        "proxyEnvSnapshot".to_string(),
+        Value::Object(proxy_env_snapshot()),
+    );
 
     // Environment variables (Windows-specific)
     let env_vars: Vec<(&str, Option<String>)> = vec![
@@ -1929,93 +2154,202 @@ pub fn get_cli_debug_info(custom_bin: Option<&str>) -> serde_json::Value {
 
 /// Build a command that correctly handles .cmd files on Windows.
 /// Uses CREATE_NO_WINDOW to prevent visible console windows.
-pub fn build_command_for_binary(bin: &str) -> Command {
+pub fn build_command_for_binary_with_console(bin: &str, hide_console: bool) -> Command {
     #[cfg(windows)]
     {
         // On Windows, .cmd files need to be run through cmd.exe
         let bin_lower = bin.to_lowercase();
         if bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat") {
-            let mut cmd = crate::utils::async_command("cmd");
+            let mut cmd =
+                crate::utils::async_command_with_console_visibility("cmd", hide_console);
             cmd.arg("/c");
             cmd.arg(bin);
             return cmd;
         }
     }
-    crate::utils::async_command(bin)
+    crate::utils::async_command_with_console_visibility(bin, hide_console)
 }
 
-pub(crate) fn build_codex_command_with_bin(codex_bin: Option<String>) -> Command {
-    // Try to find the actual binary path
-    let bin = if let Some(ref custom) = codex_bin {
-        if !custom.trim().is_empty() {
-            custom.clone()
-        } else {
-            // Try to find codex first (supports app-server), then claude as fallback
-            find_cli_binary("codex", None)
-                .or_else(|| find_cli_binary("claude", None))
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| "codex".into())
-        }
-    } else {
-        // Try to find codex first (supports app-server), then claude as fallback
-        find_cli_binary("codex", None)
-            .or_else(|| find_cli_binary("claude", None))
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| "codex".into())
-    };
+pub fn build_command_for_binary(bin: &str) -> Command {
+    build_command_for_binary_with_console(bin, true)
+}
 
-    let mut command = build_command_for_binary(&bin);
-    if let Some(path_env) = build_codex_path_env(codex_bin.as_deref()) {
+fn build_codex_command_from_launch_context(
+    launch_context: &CodexLaunchContext,
+    hide_console: bool,
+) -> Command {
+    let mut command =
+        build_command_for_binary_with_console(&launch_context.resolved_bin, hide_console);
+    if let Some(path_env) = &launch_context.path_env {
         command.env("PATH", path_env);
     }
     command
 }
 
+pub(crate) fn build_codex_command_with_bin(codex_bin: Option<String>) -> Command {
+    let launch_context = resolve_codex_launch_context(codex_bin.as_deref());
+    build_codex_command_from_launch_context(&launch_context, true)
+}
+
 /// Check if a specific CLI binary is available and return its version
 async fn check_cli_binary(bin: &str, path_env: Option<String>) -> Result<Option<String>, String> {
-    let mut command = build_command_for_binary(bin);
-    if let Some(path) = path_env {
-        command.env("PATH", path);
+    async fn run_cli_version_check_once(
+        launch_context: &CodexLaunchContext,
+        hide_console: bool,
+    ) -> Result<Option<String>, String> {
+        let mut command =
+            build_command_for_binary_with_console(&launch_context.resolved_bin, hide_console);
+        if let Some(path) = &launch_context.path_env {
+            command.env("PATH", path);
+        }
+        command.arg("--version");
+        command.stdout(std::process::Stdio::piped());
+        command.stderr(std::process::Stdio::piped());
+
+        let output = match timeout(Duration::from_secs(5), command.output()).await {
+            Ok(result) => match result {
+                Ok(out) => out,
+                Err(e) => {
+                    if e.kind() == ErrorKind::NotFound {
+                        return Err("not_found".to_string());
+                    }
+                    return Err(e.to_string());
+                }
+            },
+            Err(_) => {
+                return Err("timeout".to_string());
+            }
+        };
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let detail = if stderr.trim().is_empty() {
+                stdout.trim()
+            } else {
+                stderr.trim()
+            };
+            if detail.is_empty() {
+                return Err("failed".to_string());
+            }
+            return Err(format!("failed: {detail}"));
+        }
+
+        let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(if version.is_empty() {
+            None
+        } else {
+            Some(version)
+        })
     }
-    command.arg("--version");
+
+    let mut launch_context = resolve_codex_launch_context(Some(bin));
+    launch_context.path_env = path_env;
+
+    match run_cli_version_check_once(&launch_context, true).await {
+        Ok(version) => Ok(version),
+        Err(primary_error) => {
+            if !can_retry_wrapper_launch(&launch_context) {
+                return Err(primary_error);
+            }
+            run_cli_version_check_once(&launch_context, false)
+                .await
+                .map_err(|retry_error| {
+                    format!(
+                        "Primary wrapper launch failed: {primary_error}\nFallback retry failed: {retry_error}"
+                    )
+                })
+        }
+    }
+}
+
+#[cfg(windows)]
+fn can_retry_wrapper_launch(launch_context: &CodexLaunchContext) -> bool {
+    launch_context.wrapper_kind != "direct"
+}
+
+#[cfg(not(windows))]
+fn can_retry_wrapper_launch(_launch_context: &CodexLaunchContext) -> bool {
+    false
+}
+
+async fn run_codex_app_server_probe_once(
+    launch_context: &CodexLaunchContext,
+    codex_args: Option<&str>,
+    hide_console: bool,
+) -> Result<(), String> {
+    let mut command = build_codex_command_from_launch_context(launch_context, hide_console);
+    apply_codex_args(&mut command, codex_args)?;
+    command.arg("app-server");
+    command.arg("--help");
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
 
     let output = match timeout(Duration::from_secs(5), command.output()).await {
-        Ok(result) => match result {
-            Ok(out) => out,
-            Err(e) => {
-                if e.kind() == ErrorKind::NotFound {
-                    return Err("not_found".to_string());
-                }
-                return Err(e.to_string());
-            }
-        },
+        Ok(result) => result.map_err(|err| err.to_string())?,
         Err(_) => {
-            return Err("timeout".to_string());
+            return Err("Timed out while checking `codex app-server --help`.".to_string());
         }
     };
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let detail = if stderr.trim().is_empty() {
-            stdout.trim()
-        } else {
-            stderr.trim()
-        };
-        if detail.is_empty() {
-            return Err("failed".to_string());
-        }
-        return Err(format!("failed: {detail}"));
+    if output.status.success() {
+        return Ok(());
     }
 
-    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok(if version.is_empty() {
-        None
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let detail = if stderr.trim().is_empty() {
+        stdout.trim()
     } else {
-        Some(version)
-    })
+        stderr.trim()
+    };
+    if detail.is_empty() {
+        Err("`codex app-server --help` exited with a non-zero status.".to_string())
+    } else {
+        Err(detail.to_string())
+    }
+}
+
+pub(crate) async fn probe_codex_app_server(
+    codex_bin: Option<String>,
+    codex_args: Option<&str>,
+) -> Result<CodexAppServerProbeStatus, String> {
+    let launch_context = resolve_codex_launch_context(codex_bin.as_deref());
+    match run_codex_app_server_probe_once(&launch_context, codex_args, true).await {
+        Ok(()) => Ok(CodexAppServerProbeStatus {
+            ok: true,
+            status: "ok".to_string(),
+            details: None,
+            fallback_retried: false,
+        }),
+        Err(primary_error) => {
+            if !can_retry_wrapper_launch(&launch_context) {
+                return Ok(CodexAppServerProbeStatus {
+                    ok: false,
+                    status: "failed".to_string(),
+                    details: Some(primary_error),
+                    fallback_retried: false,
+                });
+            }
+
+            match run_codex_app_server_probe_once(&launch_context, codex_args, false).await {
+                Ok(()) => Ok(CodexAppServerProbeStatus {
+                    ok: true,
+                    status: "fallback-ok".to_string(),
+                    details: Some(primary_error),
+                    fallback_retried: true,
+                }),
+                Err(retry_error) => Ok(CodexAppServerProbeStatus {
+                    ok: false,
+                    status: "fallback-failed".to_string(),
+                    details: Some(format!(
+                        "Primary wrapper launch failed: {primary_error}\nFallback retry failed: {retry_error}"
+                    )),
+                    fallback_retried: true,
+                }),
+            }
+        }
+    }
 }
 
 pub(crate) async fn check_codex_installation(
@@ -2095,8 +2429,60 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
         .filter(|value| !value.trim().is_empty())
         .or(default_codex_bin);
     let _ = check_codex_installation(codex_bin.clone()).await?;
+    let launch_context = resolve_codex_launch_context(codex_bin.as_deref());
 
-    let mut command = build_codex_command_with_bin(codex_bin);
+    let primary_result = spawn_workspace_session_once(
+        entry.clone(),
+        codex_args.clone(),
+        codex_home.clone(),
+        client_version.clone(),
+        event_sink.clone(),
+        &launch_context,
+        true,
+    )
+    .await;
+    match primary_result {
+        Ok(session) => Ok(session),
+        Err(primary_error) => {
+            if !can_retry_wrapper_launch(&launch_context) {
+                return Err(primary_error);
+            }
+            log::warn!(
+                "[codex-wrapper-fallback] retrying workspace={} bin={} wrapper={} after primary failure: {}",
+                entry.id,
+                launch_context.resolved_bin,
+                launch_context.wrapper_kind,
+                primary_error
+            );
+            spawn_workspace_session_once(
+                entry,
+                codex_args,
+                codex_home,
+                client_version,
+                event_sink,
+                &launch_context,
+                false,
+            )
+            .await
+            .map_err(|retry_error| {
+                format!(
+                    "Primary wrapper launch failed: {primary_error}\nFallback retry failed: {retry_error}"
+                )
+            })
+        }
+    }
+}
+
+async fn spawn_workspace_session_once<E: EventSink>(
+    entry: WorkspaceEntry,
+    codex_args: Option<String>,
+    codex_home: Option<PathBuf>,
+    client_version: String,
+    event_sink: E,
+    launch_context: &CodexLaunchContext,
+    hide_console: bool,
+) -> Result<Arc<WorkspaceSession>, String> {
+    let mut command = build_codex_command_from_launch_context(launch_context, hide_console);
     let skip_spec_hint_injection = codex_args_override_instructions(codex_args.as_deref());
     apply_codex_args(&mut command, codex_args.as_deref())?;
     if !skip_spec_hint_injection {
@@ -2122,6 +2508,7 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
         child: Mutex::new(child),
         stdin: Mutex::new(stdin),
         pending: Mutex::new(HashMap::new()),
+        timed_out_requests: Mutex::new(HashMap::new()),
         next_id: AtomicU64::new(1),
         background_thread_callbacks: Mutex::new(HashMap::new()),
         thread_mode_state: ThreadModeState::default(),
@@ -2209,6 +2596,23 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
                 if has_result_or_error {
                     if let Some(tx) = session_clone.pending.lock().await.remove(&id) {
                         let _ = tx.send(value);
+                    } else if let Some(timed_out_request) =
+                        session_clone.take_timed_out_request(id).await
+                    {
+                        if timed_out_request.method == "turn/start" {
+                            let synthetic_event = if response_error_message(&value).is_some() {
+                                build_late_turn_error_event(&value, &timed_out_request)
+                            } else {
+                                build_late_turn_started_event(&value)
+                            };
+                            if let Some(synthetic_event) = synthetic_event {
+                                let payload = AppServerEvent {
+                                    workspace_id: workspace_id.clone(),
+                                    message: synthetic_event,
+                                };
+                                event_sink_clone.emit_app_server_event(payload);
+                            }
+                        }
                     }
                 } else if has_method {
                     // Check for background thread callback
@@ -2400,7 +2804,11 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
             );
         }
     };
-    init_response?;
+    if let Err(error) = init_response {
+        let mut child = session.child.lock().await;
+        let _ = child.kill().await;
+        return Err(error);
+    }
     session.send_notification("initialized", None).await?;
 
     let payload = AppServerEvent {
@@ -2419,6 +2827,7 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
 mod tests {
     use super::{
         build_mode_blocked_event, build_plan_blocker_user_input_event,
+        build_late_turn_error_event, build_late_turn_started_event,
         codex_args_override_instructions, codex_external_spec_priority_config_arg,
         detect_plan_blocker_reason, detect_repo_mutating_blocked_method,
         evaluate_auto_compaction_state, extract_compaction_usage_percent, extract_plan_step_count,
@@ -2427,11 +2836,12 @@ mod tests {
         looks_like_executable_plan_text, looks_like_plan_blocker_prompt,
         looks_like_user_info_followup_prompt, normalize_command_tokens_from_item,
         should_block_request_user_input, AutoCompactionThreadState, PlanTurnState,
+        TimedOutRequest,
         MODE_BLOCKED_PLAN_REASON, MODE_BLOCKED_PLAN_SUGGESTION, MODE_BLOCKED_REASON,
         MODE_BLOCKED_REASON_CODE_PLAN_READONLY, MODE_BLOCKED_REASON_CODE_REQUEST_USER_INPUT,
-        MODE_BLOCKED_SUGGESTION,
+        MODE_BLOCKED_SUGGESTION, wrapper_kind_for_binary,
     };
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     #[test]
     fn extract_thread_id_reads_camel_case() {
@@ -2665,6 +3075,120 @@ mod tests {
         assert!(arg.starts_with("developer_instructions=\""));
         assert!(arg.ends_with('"'));
         assert!(arg.contains("writableRoots"));
+    }
+
+    #[test]
+    fn build_late_turn_started_event_extracts_turn_identity() {
+        let response = json!({
+            "id": 9,
+            "result": {
+                "turn": {
+                    "id": "turn-123",
+                    "threadId": "thread-456"
+                }
+            }
+        });
+
+        let event = build_late_turn_started_event(&response).expect("late turn event");
+        assert_eq!(event.get("method").and_then(Value::as_str), Some("turn/started"));
+        assert_eq!(
+            event
+                .get("params")
+                .and_then(|params| params.get("threadId"))
+                .and_then(Value::as_str),
+            Some("thread-456")
+        );
+        assert_eq!(
+            event
+                .get("params")
+                .and_then(|params| params.get("turnId"))
+                .and_then(Value::as_str),
+            Some("turn-123")
+        );
+    }
+
+    #[test]
+    fn build_late_turn_error_event_extracts_thread_identity_and_message() {
+        let response = json!({
+            "id": 9,
+            "error": {
+                "message": "Upstream overloaded",
+                "code": -32001
+            }
+        });
+        let request = TimedOutRequest {
+            method: "turn/start".to_string(),
+            thread_id: Some("thread-456".to_string()),
+            timed_out_at_ms: 0,
+        };
+
+        let event = build_late_turn_error_event(&response, &request).expect("late turn error");
+        assert_eq!(event.get("method").and_then(Value::as_str), Some("turn/error"));
+        assert_eq!(
+            event
+                .get("params")
+                .and_then(|params| params.get("threadId"))
+                .and_then(Value::as_str),
+            Some("thread-456")
+        );
+        assert_eq!(
+            event
+                .get("params")
+                .and_then(|params| params.get("error"))
+                .and_then(|error| error.get("message"))
+                .and_then(Value::as_str),
+            Some("Upstream overloaded")
+        );
+        assert_eq!(
+            event
+                .get("params")
+                .and_then(|params| params.get("willRetry"))
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn build_late_turn_error_event_reads_nested_result_error_message() {
+        let response = json!({
+            "id": 9,
+            "result": {
+                "error": {
+                    "message": "Late nested failure",
+                    "code": -32002
+                }
+            }
+        });
+        let request = TimedOutRequest {
+            method: "turn/start".to_string(),
+            thread_id: Some("thread-789".to_string()),
+            timed_out_at_ms: 0,
+        };
+
+        let event = build_late_turn_error_event(&response, &request).expect("late turn error");
+        assert_eq!(event.get("method").and_then(Value::as_str), Some("turn/error"));
+        assert_eq!(
+            event
+                .get("params")
+                .and_then(|params| params.get("threadId"))
+                .and_then(Value::as_str),
+            Some("thread-789")
+        );
+        assert_eq!(
+            event
+                .get("params")
+                .and_then(|params| params.get("error"))
+                .and_then(|error| error.get("message"))
+                .and_then(Value::as_str),
+            Some("Late nested failure")
+        );
+    }
+
+    #[test]
+    fn wrapper_kind_for_binary_labels_windows_wrappers() {
+        assert_eq!(wrapper_kind_for_binary("codex"), "direct");
+        assert_eq!(wrapper_kind_for_binary("C:/bin/codex.cmd"), "cmd-wrapper");
+        assert_eq!(wrapper_kind_for_binary("C:/bin/codex.bat"), "bat-wrapper");
     }
 
     #[test]

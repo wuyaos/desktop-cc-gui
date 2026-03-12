@@ -67,6 +67,8 @@ const defaultSettings: AppSettings = {
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
   remoteBackendToken: null,
+  systemProxyEnabled: false,
+  systemProxyUrl: null,
   defaultAccessMode: "full-access",
   composerModelShortcut: "cmd+shift+m",
   composerAccessShortcut: "cmd+shift+a",
@@ -160,6 +162,9 @@ function normalizeAppSettings(
     ...settings,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
+    systemProxyUrl: settings.systemProxyUrl?.trim()
+      ? settings.systemProxyUrl.trim()
+      : null,
     uiScale: clampUiScale(settings.uiScale),
     theme: allowedThemes.has(settings.theme) ? settings.theme : "system",
     userMsgColor: fallbackUserMsgColor,

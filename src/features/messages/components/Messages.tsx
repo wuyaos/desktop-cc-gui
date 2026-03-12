@@ -8,6 +8,7 @@ import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import X from "lucide-react/dist/esm/icons/x";
+import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import type {
   ConversationItem,
   OpenAppTarget,
@@ -48,6 +49,8 @@ type MessagesProps = {
   threadId: string | null;
   workspaceId?: string | null;
   isThinking: boolean;
+  proxyEnabled?: boolean;
+  proxyUrl?: string | null;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
   heartbeatPulse?: number;
@@ -75,6 +78,8 @@ type MessagesProps = {
 
 type WorkingIndicatorProps = {
   isThinking: boolean;
+  proxyEnabled?: boolean;
+  proxyUrl?: string | null;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
   heartbeatPulse?: number;
@@ -1051,6 +1056,8 @@ function shouldDisplayWorkingActivityLabel(
 
 const WorkingIndicator = memo(function WorkingIndicator({
   isThinking,
+  proxyEnabled = false,
+  proxyUrl = null,
   processingStartedAt = null,
   lastDurationMs = null,
   heartbeatPulse = 0,
@@ -1142,6 +1149,15 @@ const WorkingIndicator = memo(function WorkingIndicator({
     <>
       {isThinking && (
         <div className="working">
+          {proxyEnabled && (
+            <ProxyStatusBadge
+              proxyUrl={proxyUrl}
+              label={t("messages.proxyBadge")}
+              variant="prominent"
+              animated
+              className="working-proxy-badge"
+            />
+          )}
           <span className="working-spinner" aria-hidden />
           <div className="working-timer">
             <span className="working-timer-clock">{formatDurationMs(elapsedMs)}</span>
@@ -1469,6 +1485,8 @@ export const Messages = memo(function Messages({
   threadId: legacyThreadId,
   workspaceId: legacyWorkspaceId = null,
   isThinking: legacyIsThinking,
+  proxyEnabled = false,
+  proxyUrl = null,
   processingStartedAt = null,
   lastDurationMs = null,
   heartbeatPulse: legacyHeartbeatPulse = 0,
@@ -1528,7 +1546,6 @@ export const Messages = memo(function Messages({
       }),
     [conversationState, legacyItems, legacyThreadId, legacyWorkspaceId],
   );
-  const plan = effectiveState.plan;
   const userInputRequests = effectiveState.userInputQueue;
   const workspaceId = effectiveState.meta.workspaceId || legacyWorkspaceId;
   const threadId = effectiveState.meta.threadId || legacyThreadId;
@@ -1565,9 +1582,9 @@ export const Messages = memo(function Messages({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
+  const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
   const [showAllHistoryItems, setShowAllHistoryItems] = useState(false);
   const hideClaudeReasoning = activeEngine === "claude" && shouldHideClaudeReasoningModule();
-  const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
   const [isSelectionFrozen, setIsSelectionFrozen] = useState(false);
   const copyTimeoutRef = useRef<number | null>(null);
   const planPanelFocusRafRef = useRef<number | null>(null);
@@ -2170,6 +2187,19 @@ export const Messages = memo(function Messages({
       )
       : null;
 
+  const plan = effectiveState.plan;
+  useEffect(() => {
+    setIsPlanPreviewOpen(false);
+  }, [plan?.turnId]);
+
+  const handlePlanClick = useCallback(() => {
+    if (_onOpenPlanPanel) {
+      _onOpenPlanPanel();
+      return;
+    }
+    setIsPlanPreviewOpen((previous) => !previous);
+  }, [_onOpenPlanPanel]);
+
   const planQuickViewNode = plan
     ? (
       <div
@@ -2180,13 +2210,13 @@ export const Messages = memo(function Messages({
           <button
             type="button"
             className="ghost"
-            onClick={() => setIsPlanPreviewOpen((previous) => !previous)}
+            onClick={handlePlanClick}
             aria-label="Plan"
-            style={{ marginBottom: isPlanPreviewOpen ? 8 : 0 }}
+            style={{ marginBottom: !_onOpenPlanPanel && isPlanPreviewOpen ? 8 : 0 }}
           >
             Plan
           </button>
-          {isPlanPreviewOpen && (
+          {!_onOpenPlanPanel && isPlanPreviewOpen && (
             <div style={{ display: "grid", gap: 6 }}>
               {plan.explanation ? <div>{plan.explanation}</div> : null}
               {plan.steps.map((step, index) => (
@@ -2405,6 +2435,8 @@ export const Messages = memo(function Messages({
           {userInputNode}
           <WorkingIndicator
             isThinking={isThinking}
+            proxyEnabled={proxyEnabled}
+            proxyUrl={proxyUrl}
             processingStartedAt={processingStartedAt}
             lastDurationMs={lastDurationMs}
             heartbeatPulse={heartbeatPulse}
