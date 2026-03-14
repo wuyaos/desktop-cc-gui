@@ -99,6 +99,123 @@ function canExpandEvent(event: SessionActivityEvent) {
   return canExpandCommand(event) || canExpandReasoning(event);
 }
 
+function unwrapShellCommand(command: string) {
+  let normalized = command.trim();
+  const shellWrapperPattern =
+    /^(?:\/\S+\/)?(?:bash|zsh|sh|fish)(?:\.exe)?\s+-lc\s+(?:(['"])([\s\S]+)\1|([\s\S]+))$/i;
+  for (let iteration = 0; iteration < 3; iteration += 1) {
+    const wrapperMatch = normalized.match(shellWrapperPattern);
+    if (!wrapperMatch) {
+      break;
+    }
+    normalized = (wrapperMatch[2] ?? wrapperMatch[3] ?? "").trim();
+  }
+  return normalized;
+}
+
+function stripShellPrelude(command: string) {
+  let normalized = command.trim();
+  const sourcePattern = /^\s*(?:source|\.)\s+~\/\.zshrc\s*(?:&&|;)\s*/i;
+  const cdPattern = /^\s*cd\s+[^;&|]+(?:&&|;)\s*/i;
+  for (let iteration = 0; iteration < 4; iteration += 1) {
+    const next = normalized.replace(sourcePattern, "").replace(cdPattern, "").trim();
+    if (next === normalized) {
+      break;
+    }
+    normalized = next;
+  }
+  return normalized;
+}
+
+function normalizeCollapsedCommand(command: string) {
+  const unwrapped = unwrapShellCommand(command);
+  const stripped = stripShellPrelude(unwrapped);
+  return stripped || unwrapped || command.trim();
+}
+
+function splitCommandTokens(command: string) {
+  const primarySegment = command.split(/\s*(?:&&|\|\||;|\|)\s*/)[0]?.trim() ?? "";
+  if (!primarySegment) {
+    return [];
+  }
+  return primarySegment.split(/\s+/).filter(Boolean);
+}
+
+function resolvePackageSubcommand(tokens: string[]) {
+  const packageRunners = new Set(["pnpm", "npm", "yarn", "bun", "npx"]);
+  if (tokens.length === 0 || !packageRunners.has(tokens[0]?.toLowerCase() ?? "")) {
+    return "";
+  }
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index]?.toLowerCase() ?? "";
+    if (!token || token.startsWith("-")) {
+      continue;
+    }
+    if (token === "run" && index + 1 < tokens.length) {
+      const nextToken = tokens[index + 1]?.toLowerCase() ?? "";
+      if (nextToken && !nextToken.startsWith("-")) {
+        return nextToken;
+      }
+      continue;
+    }
+    return token;
+  }
+  return "";
+}
+
+function resolveCollapsedCommandCategory(
+  command: string,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  const tokens = splitCommandTokens(command);
+  const primary = tokens[0]?.toLowerCase() ?? "";
+  const packageSubcommand = resolvePackageSubcommand(tokens);
+  const resolvedRunner = packageSubcommand || primary;
+
+  if (["rg", "grep", "find", "fd", "ag"].includes(primary)) {
+    return t("activityPanel.commandCategories.search");
+  }
+  if (["sed", "cat", "head", "tail", "less", "more", "awk"].includes(primary)) {
+    return t("activityPanel.commandCategories.read");
+  }
+  if (primary === "ls" || primary === "tree") {
+    return t("activityPanel.commandCategories.list");
+  }
+  if (["git", "gh"].includes(primary)) {
+    return t("activityPanel.commandCategories.git");
+  }
+  if (
+    ["vitest", "jest", "pytest", "mocha", "ava", "tap", "test"].includes(resolvedRunner) ||
+    resolvedRunner.endsWith(":test") ||
+    resolvedRunner.endsWith("_test")
+  ) {
+    return t("activityPanel.commandCategories.test");
+  }
+  if (
+    ["lint", "eslint", "stylelint"].includes(resolvedRunner) ||
+    resolvedRunner.endsWith(":lint")
+  ) {
+    return t("activityPanel.commandCategories.lint");
+  }
+  if (
+    ["build", "tsc", "webpack", "rollup", "vite"].includes(resolvedRunner) ||
+    resolvedRunner.endsWith(":build")
+  ) {
+    return t("activityPanel.commandCategories.build");
+  }
+  if (["node", "python", "python3", "ruby", "perl", "php", "go", "java"].includes(primary)) {
+    return t("activityPanel.commandCategories.run");
+  }
+  return t("activityPanel.commandCategories.command");
+}
+
+function truncateCollapsedCommand(command: string, maxLength = 108) {
+  if (command.length <= maxLength) {
+    return command;
+  }
+  return `${command.slice(0, maxLength - 1)}…`;
+}
+
 function shouldAutoExpandRunningEvent(
   event: SessionActivityEvent,
   latestRunningReasoningEventId: string | null,
@@ -119,7 +236,18 @@ function getCollapsedCommandSummary(
   if (event.kind !== "command") {
     return event.summary;
   }
-  return event.commandDescription || t("activityPanel.commandPendingSummary");
+  const description = event.commandDescription?.trim();
+  if (description) {
+    return description;
+  }
+  const commandText = event.commandText?.trim();
+  if (commandText) {
+    const normalized = normalizeCollapsedCommand(commandText);
+    const category = resolveCollapsedCommandCategory(normalized, t);
+    const concise = truncateCollapsedCommand(normalized);
+    return `${category} · ${concise}`;
+  }
+  return t("activityPanel.commandPendingSummary");
 }
 
 export function WorkspaceSessionActivityPanel({

@@ -223,6 +223,21 @@ function resolveReadableFilePath(candidate: string | undefined) {
   return normalized;
 }
 
+function joinDirectoryAndFilePath(directory: string, filePath: string) {
+  const normalizedDirectory = directory.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalizedFilePath = filePath.replace(/\\/g, "/").replace(/^\.\/+/, "");
+  if (!normalizedDirectory || !normalizedFilePath) {
+    return "";
+  }
+  if (
+    normalizedFilePath.startsWith("/") ||
+    /^[A-Za-z]:\//.test(normalizedFilePath)
+  ) {
+    return normalizedFilePath;
+  }
+  return `${normalizedDirectory}/${normalizedFilePath}`;
+}
+
 function extractPrimaryChangeDiff(
   item: Extract<ConversationItem, { kind: "tool" }>,
   filePath: string | undefined,
@@ -276,14 +291,27 @@ function summarizeInspectionTool(item: Extract<ConversationItem, { kind: "tool" 
     getFirstNonEmptyValue(args, INSPECTION_PATH_KEYS) ||
     getFirstNonEmptyValue(inputArgs, INSPECTION_PATH_KEYS) ||
     getFirstNonEmptyValue(nestedArgs, INSPECTION_PATH_KEYS);
+  const workingDirectory =
+    getFirstNonEmptyValue(args, ["cwd", "workdir", "working_directory", "workingDirectory", "directory", "dir"]) ||
+    getFirstNonEmptyValue(inputArgs, ["cwd", "workdir", "working_directory", "workingDirectory", "directory", "dir"]) ||
+    getFirstNonEmptyValue(nestedArgs, ["cwd", "workdir", "working_directory", "workingDirectory", "directory", "dir"]);
   const toolLabel = toolName.replace(/^mcp__[^_]+__/, "").replace(/_/g, " ");
 
   if (isReadTool(toolName)) {
     const resolvedPath = resolveReadableFilePath(path);
+    const resolvedWorkingDirectory = resolveReadableFilePath(workingDirectory);
+    const combinedPath =
+      resolvedPath &&
+      resolvedWorkingDirectory &&
+      !resolvedPath.startsWith("/") &&
+      !/^[A-Za-z]:[\\/]/.test(resolvedPath)
+        ? resolveReadableFilePath(joinDirectoryAndFilePath(resolvedWorkingDirectory, resolvedPath))
+        : null;
+    const finalPath = combinedPath || resolvedPath;
     return {
-      summary: `Read · ${resolvedPath || path || toolLabel || "file"}`,
-      jumpTarget: resolvedPath
-        ? ({ type: "file", path: resolvedPath } as const)
+      summary: `Read · ${finalPath || path || toolLabel || "file"}`,
+      jumpTarget: finalPath
+        ? ({ type: "file", path: finalPath } as const)
         : undefined,
     };
   }

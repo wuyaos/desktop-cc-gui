@@ -54,25 +54,6 @@ function getClaudeToolInputText(message: Record<string, unknown>) {
     message.tool_input && typeof message.tool_input === "object"
       ? (message.tool_input as Record<string, unknown>)
       : null;
-  const command = asString(
-    toolInput?.command ??
-      toolInput?.cmd ??
-      toolInput?.script ??
-      toolInput?.bash ??
-      "",
-  );
-  const description = asString(
-    toolInput?.description ?? toolInput?.summary ?? toolInput?.label ?? "",
-  );
-  if (command && description) {
-    return JSON.stringify({ command, description });
-  }
-  if (command) {
-    return JSON.stringify({ command });
-  }
-  if (description) {
-    return description;
-  }
   if (toolInput && Object.keys(toolInput).length > 0) {
     return JSON.stringify(toolInput);
   }

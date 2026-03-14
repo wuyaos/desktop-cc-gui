@@ -64,4 +64,33 @@ describe("parseClaudeHistoryMessages", () => {
       expect(items[0].detail).toContain("/workspace/README.md");
     }
   });
+
+  it("preserves full command tool_input payload so session activity can read cwd/argv", () => {
+    const items = parseClaudeHistoryMessages([
+      {
+        kind: "tool",
+        id: "tool-bash-1",
+        tool_name: "bash",
+        tool_input: {
+          argv: ["zsh", "-lc", "pnpm vitest"],
+          cwd: "/workspace/project",
+          description: "run tests",
+        },
+      },
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: "tool-bash-1",
+      kind: "tool",
+      toolType: "bash",
+      title: "bash",
+      status: "started",
+    });
+    if (items[0]?.kind === "tool") {
+      expect(items[0].detail).toContain("argv");
+      expect(items[0].detail).toContain("/workspace/project");
+      expect(items[0].detail).toContain("run tests");
+    }
+  });
 });

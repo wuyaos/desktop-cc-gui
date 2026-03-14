@@ -245,6 +245,39 @@ describe("buildWorkspaceSessionActivity", () => {
     expect(result.timeline[0]?.commandWorkingDirectory).toBe("/workspace/demo");
   });
 
+  it("extracts command metadata from argv-style Claude tool payload", () => {
+    const threads: ThreadSummary[] = [{ id: "claude:session-1", name: "Claude", updatedAt: 1000 }];
+    const itemsByThread = {
+      "claude:session-1": [
+        toolItem("cmd-argv-1", {
+          toolType: "bash",
+          title: "bash",
+          detail: JSON.stringify({
+            argv: ["zsh", "-lc", "pnpm vitest"],
+            cwd: "/workspace/project",
+            description: "run tests",
+          }),
+          status: "running",
+        }),
+      ],
+    };
+
+    const result = buildWorkspaceSessionActivity({
+      activeThreadId: "claude:session-1",
+      threads,
+      itemsByThread,
+      threadParentById: {},
+      threadStatusById: { "claude:session-1": { isProcessing: true } },
+    });
+
+    expect(result.timeline).toHaveLength(1);
+    expect(result.timeline[0]?.kind).toBe("command");
+    expect(result.timeline[0]?.summary).toBe("zsh -lc pnpm vitest");
+    expect(result.timeline[0]?.commandText).toBe("zsh -lc pnpm vitest");
+    expect(result.timeline[0]?.commandDescription).toBe("run tests");
+    expect(result.timeline[0]?.commandWorkingDirectory).toBe("/workspace/project");
+  });
+
   it("settles stale running events once the thread is no longer processing", () => {
     const threads: ThreadSummary[] = [{ id: "root", name: "Root", updatedAt: 1000 }];
     const itemsByThread = {
@@ -339,6 +372,106 @@ describe("buildWorkspaceSessionActivity", () => {
     expect(result.timeline[0]?.jumpTarget).toEqual({
       type: "file",
       path: "/workspace/README.md",
+    });
+  });
+
+  it("joins cwd with basename-only read path so file card can open correctly", () => {
+    const threads: ThreadSummary[] = [{ id: "root", name: "Root", updatedAt: 1000 }];
+    const itemsByThread = {
+      root: [
+        toolItem("tool-read", {
+          toolType: "mcpToolCall",
+          title: "Tool: read",
+          detail: JSON.stringify({
+            path: "retrieve_memory.py",
+            cwd: "dify/mem0-plugin-src/modified/tools",
+          }),
+          status: "started",
+        }),
+      ],
+    };
+
+    const result = buildWorkspaceSessionActivity({
+      activeThreadId: "root",
+      threads,
+      itemsByThread,
+      threadParentById: {},
+      threadStatusById: { root: { isProcessing: true } },
+    });
+
+    expect(result.timeline).toHaveLength(1);
+    expect(result.timeline[0]?.summary).toBe(
+      "Read · dify/mem0-plugin-src/modified/tools/retrieve_memory.py",
+    );
+    expect(result.timeline[0]?.jumpTarget).toEqual({
+      type: "file",
+      path: "dify/mem0-plugin-src/modified/tools/retrieve_memory.py",
+    });
+  });
+
+  it("joins cwd with relative read path that includes subdirectories", () => {
+    const threads: ThreadSummary[] = [{ id: "root", name: "Root", updatedAt: 1000 }];
+    const itemsByThread = {
+      root: [
+        toolItem("tool-read", {
+          toolType: "mcpToolCall",
+          title: "Tool: read",
+          detail: JSON.stringify({
+            path: "tools/retrieve_memory.py",
+            cwd: "dify/mem0-plugin-src/modified",
+          }),
+          status: "started",
+        }),
+      ],
+    };
+
+    const result = buildWorkspaceSessionActivity({
+      activeThreadId: "root",
+      threads,
+      itemsByThread,
+      threadParentById: {},
+      threadStatusById: { root: { isProcessing: true } },
+    });
+
+    expect(result.timeline).toHaveLength(1);
+    expect(result.timeline[0]?.summary).toBe(
+      "Read · dify/mem0-plugin-src/modified/tools/retrieve_memory.py",
+    );
+    expect(result.timeline[0]?.jumpTarget).toEqual({
+      type: "file",
+      path: "dify/mem0-plugin-src/modified/tools/retrieve_memory.py",
+    });
+  });
+
+  it("does not join cwd for windows absolute path", () => {
+    const threads: ThreadSummary[] = [{ id: "root", name: "Root", updatedAt: 1000 }];
+    const itemsByThread = {
+      root: [
+        toolItem("tool-read", {
+          toolType: "mcpToolCall",
+          title: "Tool: read",
+          detail: JSON.stringify({
+            path: "C:\\workspace\\repo\\retrieve_memory.py",
+            cwd: "dify/mem0-plugin-src/modified",
+          }),
+          status: "started",
+        }),
+      ],
+    };
+
+    const result = buildWorkspaceSessionActivity({
+      activeThreadId: "root",
+      threads,
+      itemsByThread,
+      threadParentById: {},
+      threadStatusById: { root: { isProcessing: true } },
+    });
+
+    expect(result.timeline).toHaveLength(1);
+    expect(result.timeline[0]?.summary).toBe("Read · C:\\workspace\\repo\\retrieve_memory.py");
+    expect(result.timeline[0]?.jumpTarget).toEqual({
+      type: "file",
+      path: "C:\\workspace\\repo\\retrieve_memory.py",
     });
   });
 

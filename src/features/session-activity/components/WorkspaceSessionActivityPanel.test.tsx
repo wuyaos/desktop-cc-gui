@@ -731,6 +731,58 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(getPreviewTextForKind(view.container, "command")).toBeNull();
   });
 
+  it("falls back to command text when command description is missing", () => {
+    const viewModel = createViewModel();
+    viewModel.timeline = viewModel.timeline.map((event) =>
+      event.kind === "command"
+        ? {
+            ...event,
+            commandDescription: "",
+          }
+        : event,
+    );
+
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={viewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    expect(
+      view.container.querySelectorAll(".session-activity-card-title")[2]?.textContent,
+    ).toBe("activityPanel.commandCategories.test · pnpm vitest --runInBand");
+  });
+
+  it("normalizes wrapped shell command and adds category in collapsed command title", () => {
+    const viewModel = createViewModel();
+    viewModel.timeline = viewModel.timeline.map((event) =>
+      event.kind === "command"
+        ? {
+            ...event,
+            commandDescription: "",
+            commandText:
+              "/bin/zsh -lc \"zsh -lc 'source ~/.zshrc && rg -n \\\"TODO\\\" src'\"",
+          }
+        : event,
+    );
+
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={viewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+
+    expect(
+      view.container.querySelectorAll(".session-activity-card-title")[2]?.textContent,
+    ).toBe("activityPanel.commandCategories.search · rg -n \\\"TODO\\\" src");
+  });
+
   it("auto-collapses running commands 1s after completion", () => {
     vi.useFakeTimers();
     const { container, rerender } = render(
