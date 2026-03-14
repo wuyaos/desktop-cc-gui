@@ -729,6 +729,48 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(view.container.querySelector(".session-activity-preview-text")).toBeNull();
   });
 
+  it("expands explore events for path-like preview text when jumpTarget is not a file", () => {
+    const onSelectThread = vi.fn();
+    const onOpenDiffPath = vi.fn();
+    const viewModel = createViewModel();
+    viewModel.timeline = [
+      {
+        eventId: "explore-pathlike-nonfile-1",
+        turnId: "turn-1",
+        turnIndex: 1,
+        threadId: "root-thread",
+        threadName: "Root session",
+        sessionRole: "root",
+        relationshipSource: "directParent",
+        kind: "explore",
+        occurredAt: 41,
+        summary: "List · 当前生效路径",
+        status: "completed",
+        explorePreview: "/Users/chenxiangning/code/AI/github/codemoss-openspec/openspec",
+        jumpTarget: { type: "thread", threadId: "root-thread" },
+      },
+    ];
+
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={viewModel}
+        onOpenDiffPath={onOpenDiffPath}
+        onSelectThread={onSelectThread}
+      />,
+    );
+
+    expect(view.container.querySelector(".session-activity-preview-toggle")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /List · 当前生效路径/i }));
+
+    expect(view.container.querySelector(".session-activity-preview-text")?.textContent).toContain(
+      "/Users/chenxiangning/code/AI/github/codemoss-openspec/openspec",
+    );
+    expect(onSelectThread).not.toHaveBeenCalled();
+    expect(onOpenDiffPath).not.toHaveBeenCalled();
+  });
+
   it("auto-expands reasoning while running and allows manual collapse/expand", () => {
     const view = render(
       <WorkspaceSessionActivityPanel
@@ -919,7 +961,7 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(olderReasoningCard?.classList.contains("is-expanded")).toBe(false);
   });
 
-  it("auto-collapses reasoning 1s after completion", () => {
+  it("keeps running reasoning expanded for at least 2s, then auto-collapses after completion", () => {
     vi.useFakeTimers();
     const { container, rerender } = render(
       <WorkspaceSessionActivityPanel
@@ -957,9 +999,13 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(container.querySelector(".session-activity-event-reasoning.is-expanded")).toBeTruthy();
 
     act(() => {
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1999);
     });
 
+    expect(container.querySelector(".session-activity-event-reasoning.is-expanded")).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
     expect(container.querySelector(".session-activity-event-reasoning.is-expanded")).toBeNull();
     vi.useRealTimers();
   });
@@ -1066,7 +1112,7 @@ describe("WorkspaceSessionActivityPanel", () => {
     ).toBe("activityPanel.commandCategories.search · rg -n \\\"TODO\\\" src");
   });
 
-  it("auto-collapses running commands 1s after completion", () => {
+  it("keeps running commands expanded for at least 2s, then auto-collapses after completion", () => {
     vi.useFakeTimers();
     const { container, rerender } = render(
       <WorkspaceSessionActivityPanel
@@ -1107,9 +1153,13 @@ describe("WorkspaceSessionActivityPanel", () => {
     );
 
     act(() => {
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1999);
     });
 
+    expect(container.querySelector(".session-activity-event-command.is-expanded")).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
     expect(container.querySelector(".session-activity-event-command.is-expanded")).toBeNull();
     expect(getPreviewTextForKind(container, "command")).toBeNull();
     vi.useRealTimers();
@@ -1206,6 +1256,98 @@ describe("WorkspaceSessionActivityPanel", () => {
     expect(getPreviewTextForKind(view.container, "command")?.textContent).toBe(
       "line 1\nline 2",
     );
+  });
+
+  it("renders command output as markdown when reading markdown files", () => {
+    const viewModel = createViewModel();
+    viewModel.timeline = viewModel.timeline.map((event) =>
+      event.kind === "command"
+        ? {
+            ...event,
+            commandText: "cat README.md",
+            commandPreview: "# Title\n\n- item",
+            status: "completed" as const,
+          }
+        : event,
+    );
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={viewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Run focused test suite/i }));
+
+    expect(
+      view.container.querySelector(".session-activity-event-command .session-activity-preview-text.is-command-markdown"),
+    ).toBeTruthy();
+    expect(
+      view.container.querySelector(".session-activity-event-command .session-activity-preview-markdown h1")
+        ?.textContent,
+    ).toBe("Title");
+  });
+
+  it("renders command output as code when reading source files", () => {
+    const viewModel = createViewModel();
+    viewModel.timeline = viewModel.timeline.map((event) =>
+      event.kind === "command"
+        ? {
+            ...event,
+            commandText:
+              'sed -n "1,240p" src/main/java/com/example/springbootdemo123/user/UserController.java',
+            commandPreview: "public class UserController {}",
+            status: "completed" as const,
+          }
+        : event,
+    );
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={viewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Run focused test suite/i }));
+    expect(
+      view.container.querySelector(".session-activity-event-command .session-activity-preview-text.is-command-code"),
+    ).toBeTruthy();
+    expect(
+      view.container.querySelector(".session-activity-event-command .session-activity-preview-text.is-command-code .token"),
+    ).toBeTruthy();
+  });
+
+  it("renders command output as code when reading xml files", () => {
+    const viewModel = createViewModel();
+    viewModel.timeline = viewModel.timeline.map((event) =>
+      event.kind === "command"
+        ? {
+            ...event,
+            commandText: `/bin/zsh -lc "zsh -lc 'source ~/.zshrc && cat pom.xml'"`,
+            commandPreview:
+              '<?xml version="1.0" encoding="UTF-8"?>\n<project>\n  <modelVersion>4.0.0</modelVersion>\n</project>',
+            status: "completed" as const,
+          }
+        : event,
+    );
+    const view = render(
+      <WorkspaceSessionActivityPanel
+        workspaceId="workspace-1"
+        viewModel={viewModel}
+        onOpenDiffPath={vi.fn()}
+        onSelectThread={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Run focused test suite/i }));
+
+    expect(
+      view.container.querySelector(".session-activity-event-command .session-activity-preview-text.is-command-code"),
+    ).toBeTruthy();
+    expect(
+      view.container.querySelector(".session-activity-event-command .session-activity-preview-text.is-command-code .token.tag"),
+    ).toBeTruthy();
   });
 
   it("uses session pills to jump directly to a related thread", () => {

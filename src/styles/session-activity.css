@@ -1,11 +1,77 @@
 .session-activity-panel {
-  --session-activity-expanded-card-max-height: min(33vh, 320px);
+  --session-activity-expanded-card-max-height: min(60vh, 320px);
+  --session-activity-command-output-bg: transparent;
+  --session-activity-command-output-border: color-mix(in srgb, var(--border-subtle) 46%, transparent);
+  --session-activity-command-output-inset: transparent;
+  --session-activity-command-output-comment: rgba(150, 170, 200, 0.78);
+  --session-activity-command-output-punctuation: rgba(200, 210, 220, 0.9);
+  --session-activity-command-output-constant: #ff7b72;
+  --session-activity-command-output-number: #f2cc60;
+  --session-activity-command-output-string: #7ee787;
+  --session-activity-command-output-operator: rgba(200, 210, 220, 0.92);
+  --session-activity-command-output-keyword: #8bd5ff;
+  --session-activity-command-output-function: #d2a8ff;
+  --session-activity-shell-command: #72b8ff;
+  --session-activity-shell-flag: #c490ff;
+  --session-activity-shell-path: #8ec2ff;
+  --session-activity-shell-permission: #f5c26b;
+  --session-activity-shell-number: #f0b560;
+  --session-activity-shell-time: #9aa8bd;
+  --session-activity-shell-env: #8bd5ff;
+  --session-activity-shell-url: #6ed7c8;
+  --session-activity-command-output-error: var(--status-error, #ef4444);
   display: flex;
   flex-direction: column;
   min-height: 0;
   height: 100%;
   background: var(--surface-right-panel, transparent);
   background: color-mix(in srgb, var(--surface-right-panel, transparent) 92%, transparent);
+}
+
+:root[data-theme="light"] .session-activity-panel {
+  --session-activity-command-output-bg: transparent;
+  --session-activity-command-output-border: color-mix(in srgb, var(--border-subtle) 54%, transparent);
+  --session-activity-command-output-inset: transparent;
+  --session-activity-command-output-comment: #6b7280;
+  --session-activity-command-output-punctuation: #374151;
+  --session-activity-command-output-constant: #b42318;
+  --session-activity-command-output-number: #a16207;
+  --session-activity-command-output-string: #047857;
+  --session-activity-command-output-operator: #1f2937;
+  --session-activity-command-output-keyword: #1d4ed8;
+  --session-activity-command-output-function: #7c3aed;
+  --session-activity-shell-command: #0f5ec7;
+  --session-activity-shell-flag: #7c3aed;
+  --session-activity-shell-path: #0e7490;
+  --session-activity-shell-permission: #b45309;
+  --session-activity-shell-number: #9a3412;
+  --session-activity-shell-time: #6b7280;
+  --session-activity-shell-env: #0369a1;
+  --session-activity-shell-url: #0f766e;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .session-activity-panel {
+    --session-activity-command-output-bg: transparent;
+    --session-activity-command-output-border: color-mix(in srgb, var(--border-subtle) 54%, transparent);
+    --session-activity-command-output-inset: transparent;
+    --session-activity-command-output-comment: #6b7280;
+    --session-activity-command-output-punctuation: #374151;
+    --session-activity-command-output-constant: #b42318;
+    --session-activity-command-output-number: #a16207;
+    --session-activity-command-output-string: #047857;
+    --session-activity-command-output-operator: #1f2937;
+    --session-activity-command-output-keyword: #1d4ed8;
+    --session-activity-command-output-function: #7c3aed;
+    --session-activity-shell-command: #0f5ec7;
+    --session-activity-shell-flag: #7c3aed;
+    --session-activity-shell-path: #0e7490;
+    --session-activity-shell-permission: #b45309;
+    --session-activity-shell-number: #9a3412;
+    --session-activity-shell-time: #6b7280;
+    --session-activity-shell-env: #0369a1;
+    --session-activity-shell-url: #0f766e;
+  }
 }
 
 .session-activity-header {
@@ -667,6 +733,91 @@
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   border: none;
   box-shadow: none;
+}
+
+.session-activity-preview-text.is-command-output {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--session-activity-command-output-border);
+  background: var(--session-activity-command-output-bg);
+  box-shadow: none;
+  line-height: 1.52;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+.session-activity-preview-text.is-command-output .session-activity-shell-token-command {
+  color: var(--session-activity-shell-command);
+}
+
+.session-activity-preview-text.is-command-output .session-activity-shell-token-flag {
+  color: var(--session-activity-shell-flag);
+}
+
+.session-activity-preview-text.is-command-output .session-activity-shell-token-path {
+  color: var(--session-activity-shell-path);
+}
+
+.session-activity-preview-text.is-command-output .session-activity-shell-token-permission {
+  color: var(--session-activity-shell-permission);
+}
+
+.session-activity-preview-text.is-command-output .session-activity-shell-token-number {
+  color: var(--session-activity-shell-number);
+}
+
+.session-activity-preview-text.is-command-output .session-activity-shell-token-time {
+  color: var(--session-activity-shell-time);
+}
+
+.session-activity-preview-text.is-command-output .session-activity-shell-token-env {
+  color: var(--session-activity-shell-env);
+}
+
+.session-activity-preview-text.is-command-output .session-activity-shell-token-url {
+  color: var(--session-activity-shell-url);
+}
+
+.session-activity-code-line-number {
+  color: color-mix(in srgb, var(--text-muted) 82%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-activity-preview-text.is-command-output :is(.token.comment, .token.prolog, .token.doctype, .token.cdata) {
+  color: var(--session-activity-command-output-comment);
+}
+
+.session-activity-preview-text.is-command-output .token.punctuation {
+  color: var(--session-activity-command-output-punctuation);
+}
+
+.session-activity-preview-text.is-command-output
+  :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted) {
+  color: var(--session-activity-command-output-constant);
+}
+
+.session-activity-preview-text.is-command-output :is(.token.boolean, .token.number) {
+  color: var(--session-activity-command-output-number);
+}
+
+.session-activity-preview-text.is-command-output
+  :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted) {
+  color: var(--session-activity-command-output-string);
+}
+
+.session-activity-preview-text.is-command-output :is(.token.operator, .token.entity, .token.url, .token.variable) {
+  color: var(--session-activity-command-output-operator);
+}
+
+.session-activity-preview-text.is-command-output :is(.token.atrule, .token.attr-value, .token.keyword) {
+  color: var(--session-activity-command-output-keyword);
+}
+
+.session-activity-preview-text.is-command-output :is(.token.function, .token.class-name) {
+  color: var(--session-activity-command-output-function);
+}
+
+.session-activity-command-line-error {
+  color: var(--session-activity-command-output-error);
 }
 
 .session-activity-preview-text.is-markdown {

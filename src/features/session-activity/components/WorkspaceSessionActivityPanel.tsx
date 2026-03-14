@@ -11,6 +11,11 @@ import Search from "lucide-react/dist/esm/icons/search";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import type { ReactNode } from "react";
 import { Markdown } from "../../messages/components/Markdown";
+import {
+  inferCommandOutputRenderMeta,
+  renderCodeOutputHtml,
+  renderShellOutputHtml,
+} from "../utils/shellOutputHighlight";
 import type { SessionActivityEvent, WorkspaceSessionActivityViewModel } from "../types";
 
 type WorkspaceSessionActivityPanelProps = {
@@ -35,6 +40,8 @@ type SessionActivityTurnGroup = {
   occurredAt: number;
   events: SessionActivityEvent[];
 };
+
+const RUNNING_CARD_MIN_EXPANDED_MS = 2000;
 
 const tabIconMap: Record<ActivityTab, ReactNode> = {
   all: <LayoutList size={14} aria-hidden />,
@@ -95,27 +102,6 @@ function canExpandReasoning(event: SessionActivityEvent) {
   return event.kind === "reasoning" && Boolean(event.reasoningPreview);
 }
 
-function looksLikeNavigablePreviewText(preview: string) {
-  const normalized = preview.trim();
-  if (!normalized || normalized.includes("\n")) {
-    return false;
-  }
-  if (/^[a-z]+:\/\//i.test(normalized)) {
-    return true;
-  }
-  if (
-    normalized.includes("/") ||
-    normalized.includes("\\") ||
-    normalized.startsWith("./") ||
-    normalized.startsWith("../") ||
-    normalized.startsWith("~/") ||
-    /^[A-Za-z]:[\\/]/.test(normalized)
-  ) {
-    return true;
-  }
-  return /\.[A-Za-z0-9]{1,16}$/.test(normalized) && !/\s/.test(normalized);
-}
-
 function canExpandExplore(event: SessionActivityEvent) {
   if (event.kind !== "explore" || !event.explorePreview) {
     return false;
@@ -123,7 +109,7 @@ function canExpandExplore(event: SessionActivityEvent) {
   if (event.jumpTarget?.type === "file") {
     return false;
   }
-  return !looksLikeNavigablePreviewText(event.explorePreview);
+  return true;
 }
 
 function canExpandEvent(event: SessionActivityEvent) {
@@ -320,6 +306,7 @@ export function WorkspaceSessionActivityPanel({
     Record<string, true>
   >({});
   const previousExpandableStatusRef = useRef<Record<string, SessionActivityEvent["status"]>>({});
+  const runningExpandedStartedAtByExpandableIdRef = useRef<Record<string, number>>({});
   const collapseDelayTimerByExpandableIdRef = useRef<Record<string, ReturnType<typeof setTimeout>>>(
     {},
   );
@@ -472,6 +459,8 @@ export function WorkspaceSessionActivityPanel({
     const nextStatusById: Record<string, SessionActivityEvent["status"]> = {};
     const previousStatusById = previousExpandableStatusRef.current;
     const existingTimers = collapseDelayTimerByExpandableIdRef.current;
+    const runningExpandedStartedAtById = runningExpandedStartedAtByExpandableIdRef.current;
+    const now = Date.now();
     let shouldUpdateCompletedDelayExpanded = false;
     const nextCompletedDelayExpanded: Record<string, true> = { ...completedDelayExpandedExpandableIds };
 
@@ -479,6 +468,9 @@ export function WorkspaceSessionActivityPanel({
       if (!canExpandEvent(event)) continue;
       nextStatusById[event.eventId] = event.status;
       if (event.status === "running") {
+        if (!runningExpandedStartedAtById[event.eventId]) {
+          runningExpandedStartedAtById[event.eventId] = now;
+        }
         if (existingTimers[event.eventId]) {
           clearTimeout(existingTimers[event.eventId]);
           delete existingTimers[event.eventId];
@@ -493,6 +485,9 @@ export function WorkspaceSessionActivityPanel({
       if (previousStatus !== "running") {
         continue;
       }
+      const runningExpandedStartedAt = runningExpandedStartedAtById[event.eventId] ?? now;
+      const elapsedMs = Math.max(0, now - runningExpandedStartedAt);
+      const collapseDelayMs = Math.max(0, RUNNING_CARD_MIN_EXPANDED_MS - elapsedMs);
       nextCompletedDelayExpanded[event.eventId] = true;
       shouldUpdateCompletedDelayExpanded = true;
       if (existingTimers[event.eventId]) {
@@ -507,8 +502,9 @@ export function WorkspaceSessionActivityPanel({
           delete next[event.eventId];
           return next;
         });
+        delete runningExpandedStartedAtByExpandableIdRef.current[event.eventId];
         delete collapseDelayTimerByExpandableIdRef.current[event.eventId];
-      }, 1000);
+      }, collapseDelayMs);
     }
 
     for (const commandId of Object.keys(nextCompletedDelayExpanded)) {
@@ -517,10 +513,17 @@ export function WorkspaceSessionActivityPanel({
       }
       delete nextCompletedDelayExpanded[commandId];
       shouldUpdateCompletedDelayExpanded = true;
+      delete runningExpandedStartedAtById[commandId];
       if (existingTimers[commandId]) {
         clearTimeout(existingTimers[commandId]);
         delete existingTimers[commandId];
       }
+    }
+    for (const eventId of Object.keys(runningExpandedStartedAtById)) {
+      if (nextStatusById[eventId]) {
+        continue;
+      }
+      delete runningExpandedStartedAtById[eventId];
     }
 
     if (shouldUpdateCompletedDelayExpanded) {
@@ -756,6 +759,10 @@ export function WorkspaceSessionActivityPanel({
     const collapsedSummary = getCollapsedCommandSummary(event, t);
     const displaySummary =
       event.kind === "reasoning" ? t("messages.thinkingLabel") : collapsedSummary;
+    const commandRenderMeta =
+      event.kind === "command" && event.commandPreview
+        ? inferCommandOutputRenderMeta(event.commandText, event.commandPreview)
+        : null;
     const cardMainAriaLabel =
       event.kind === "reasoning"
         ? event.summary || displaySummary
@@ -899,11 +906,42 @@ export function WorkspaceSessionActivityPanel({
                     />
                   </div>
                 </div>
+              ) : event.kind === "command" ? (
+                event.commandPreview && commandRenderMeta?.mode === "markdown" ? (
+                  <div className="session-activity-preview-text is-markdown is-command-markdown">
+                    <Markdown
+                      value={event.commandPreview}
+                      className="markdown session-activity-preview-markdown"
+                      codeBlockStyle="message"
+                      streamingThrottleMs={80}
+                      softBreaks
+                    />
+                  </div>
+                ) : event.commandPreview && commandRenderMeta?.mode === "code" ? (
+                  <pre
+                    className="session-activity-preview-text is-command-output is-command-code"
+                    dangerouslySetInnerHTML={{
+                      __html: renderCodeOutputHtml(
+                        event.commandPreview,
+                        commandRenderMeta.language,
+                      ),
+                    }}
+                  />
+                ) : event.commandPreview ? (
+                  <pre
+                    className="session-activity-preview-text is-command-output"
+                    dangerouslySetInnerHTML={{
+                      __html: renderShellOutputHtml(event.commandPreview),
+                    }}
+                  />
+                ) : (
+                  <pre className="session-activity-preview-text is-command-output">
+                    {t("activityPanel.waitingForOutput")}
+                  </pre>
+                )
               ) : (
                 <pre className="session-activity-preview-text">
-                  {event.kind === "explore"
-                    ? event.explorePreview || t("activityPanel.waitingForOutput")
-                    : event.commandPreview || t("activityPanel.waitingForOutput")}
+                  {event.explorePreview || t("activityPanel.waitingForOutput")}
                 </pre>
               )}
             </div>
