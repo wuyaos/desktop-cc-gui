@@ -9,7 +9,7 @@ import LayoutList from "lucide-react/dist/esm/icons/layout-list";
 import ListTodo from "lucide-react/dist/esm/icons/list-todo";
 import Search from "lucide-react/dist/esm/icons/search";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Markdown } from "../../messages/components/Markdown";
 import {
   inferCommandOutputRenderMeta,
@@ -51,6 +51,14 @@ type StickyChildSessionSummary = SessionActivitySessionSummary & {
 
 const RUNNING_CARD_MIN_EXPANDED_MS = 2000;
 const MAX_STICKY_CHILD_SESSION_COUNT = 24;
+const SESSION_PILL_COLOR_PALETTE = [
+  { hue: 158, saturation: 66, lightness: 44 },
+  { hue: 210, saturation: 72, lightness: 48 },
+  { hue: 258, saturation: 68, lightness: 56 },
+  { hue: 24, saturation: 88, lightness: 56 },
+  { hue: 338, saturation: 76, lightness: 55 },
+  { hue: 186, saturation: 70, lightness: 46 },
+] as const;
 
 const tabIconMap: Record<ActivityTab, ReactNode> = {
   all: <LayoutList size={14} aria-hidden />,
@@ -272,6 +280,38 @@ function resolveChildSessionPillLabel(
     return `Agent ${fromThreadId}`;
   }
   return `${t("activityPanel.childSession")} ${index + 1}`;
+}
+
+function resolveStringHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function resolveSessionPillStyle(
+  session: SessionActivitySessionSummary,
+  index: number,
+): CSSProperties & Record<string, string> {
+  const hashSeed = resolveStringHash(`${session.threadId}:${session.threadName}:${index}`);
+  const paletteEntry = SESSION_PILL_COLOR_PALETTE[hashSeed % SESSION_PILL_COLOR_PALETTE.length];
+  return {
+    "--session-pill-accent-h": `${paletteEntry.hue}`,
+    "--session-pill-accent-s": `${paletteEntry.saturation}%`,
+    "--session-pill-accent-l": `${paletteEntry.lightness}%`,
+  };
+}
+
+function resolveTurnGroupTitleStyle(turnIndex: number | null): CSSProperties & Record<string, string> {
+  const normalizedTurnIndex = turnIndex && turnIndex > 0 ? turnIndex : 1;
+  const paletteEntry =
+    SESSION_PILL_COLOR_PALETTE[(normalizedTurnIndex - 1) % SESSION_PILL_COLOR_PALETTE.length];
+  return {
+    "--session-turn-accent-h": `${paletteEntry.hue}`,
+    "--session-turn-accent-s": `${paletteEntry.saturation}%`,
+    "--session-turn-accent-l": `${paletteEntry.lightness}%`,
+  };
 }
 
 function shouldAutoExpandRunningEvent(
@@ -1156,11 +1196,13 @@ export function WorkspaceSessionActivityPanel({
           <div className="session-activity-related-toolbar-scroller">
             {stickyChildSessionSummaries.map((session, index) => {
               const fixedLabel = resolveChildSessionPillLabel(session, index, t);
+              const pillStyle = resolveSessionPillStyle(session, index);
               return (
                 <button
                   key={session.threadId}
                   type="button"
                   className={`session-activity-session-pill${session.isProcessing ? " is-processing" : ""}`}
+                  style={pillStyle}
                   onClick={() => onSelectThread(workspaceId, session.threadId)}
                   title={session.threadName}
                   aria-label={fixedLabel}
@@ -1195,7 +1237,10 @@ export function WorkspaceSessionActivityPanel({
                     : t("activityPanel.collapseTurnGroup")
                 }
               >
-                <span className="session-activity-turn-group-title">
+                <span
+                  className="session-activity-turn-group-title"
+                  style={resolveTurnGroupTitleStyle(group.turnIndex)}
+                >
                   {group.turnIndex
                     ? t("activityPanel.turnGroup", { index: group.turnIndex })
                     : t("activityPanel.turnGroupFallback")}
