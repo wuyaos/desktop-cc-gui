@@ -11,6 +11,7 @@ type InsertFilePathReferencesArgs = {
   onInput?: (content: string) => void;
   fileCompletion?: { close: () => void };
   commandCompletion?: { close: () => void };
+  flushInput?: () => void;
 };
 
 export function normalizePathForComparison(path: string): string {
@@ -89,6 +90,7 @@ export function insertFilePathReferences({
   onInput,
   fileCompletion,
   commandCompletion,
+  flushInput,
 }: InsertFilePathReferencesArgs): string[] {
   const editable = editableRef.current;
   if (!editable) {
@@ -118,9 +120,13 @@ export function insertFilePathReferences({
   setHasContent(!!newText.trim());
   adjustHeight();
   onInput?.(newText);
+  flushInput?.();
   setTimeout(() => {
     renderFileTags();
   }, 50);
+  setTimeout(() => {
+    renderFileTags();
+  }, 220);
 
   return validPaths;
 }

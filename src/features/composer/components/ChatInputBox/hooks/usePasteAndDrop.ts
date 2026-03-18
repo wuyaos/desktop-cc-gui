@@ -123,6 +123,30 @@ function isDropInsideElement(
   );
 }
 
+function hasUsableDragPosition(point: { x: number; y: number } | null | undefined): boolean {
+  if (!point) {
+    return false;
+  }
+  return (
+    Number.isFinite(point.x) &&
+    Number.isFinite(point.y) &&
+    !(point.x === 0 && point.y === 0)
+  );
+}
+
+function resolveDragPositionFromEvent(event: DragEvent): { x: number; y: number } | null {
+  const fromEvent = { x: event.clientX, y: event.clientY };
+  if (hasUsableDragPosition(fromEvent)) {
+    return fromEvent;
+  }
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return hasUsableDragPosition(window.__fileTreeDragPosition)
+    ? window.__fileTreeDragPosition ?? null
+    : null;
+}
+
 function extractPathCandidatesFromDataTransfer(
   dataTransfer: DataTransfer | null | undefined,
 ): string[] {
@@ -219,6 +243,7 @@ export function usePasteAndDrop({
         onInput,
         fileCompletion,
         commandCompletion,
+        flushInput,
       });
     },
     [
@@ -231,6 +256,7 @@ export function usePasteAndDrop({
       onInput,
       fileCompletion,
       commandCompletion,
+      flushInput,
     ],
   );
 
@@ -328,19 +354,23 @@ export function usePasteAndDrop({
       if (!hasActiveFileTreeDragBridge()) {
         return;
       }
-      window.__fileTreeDragPosition = { x: event.clientX, y: event.clientY };
+      const point = resolveDragPositionFromEvent(event);
+      if (point) {
+        window.__fileTreeDragPosition = point;
+      }
       const dropZone = getDropZone();
       if (!dropZone) {
         return;
       }
-      const position = { x: event.clientX, y: event.clientY };
-      if (!isDropInsideElement(dropZone, position)) {
+      const bridgePaths = readFileTreeDragBridgePaths();
+      if (bridgePaths.length === 0) {
         window.__fileTreeDragOverChat = false;
         resetDragHint();
         return;
       }
-      const bridgePaths = readFileTreeDragBridgePaths();
-      if (bridgePaths.length === 0) {
+      const isInsideByPosition = point ? isDropInsideElement(dropZone, point) : false;
+      const isInsideByBridgeHint = window.__fileTreeDragOverChat === true;
+      if (!isInsideByPosition && !isInsideByBridgeHint) {
         window.__fileTreeDragOverChat = false;
         resetDragHint();
         return;
@@ -355,7 +385,10 @@ export function usePasteAndDrop({
       if (!hasActiveFileTreeDragBridge()) {
         return;
       }
-      window.__fileTreeDragPosition = { x: event.clientX, y: event.clientY };
+      const point = resolveDragPositionFromEvent(event);
+      if (point) {
+        window.__fileTreeDragPosition = point;
+      }
       const dropZone = getDropZone();
       if (!dropZone) {
         window.__fileTreeDragOverChat = false;
@@ -363,7 +396,6 @@ export function usePasteAndDrop({
         resetDragHint();
         return;
       }
-      const position = { x: event.clientX, y: event.clientY };
       const bridgePaths = readFileTreeDragBridgePaths();
       if (bridgePaths.length === 0) {
         window.__fileTreeDragOverChat = false;
@@ -371,7 +403,9 @@ export function usePasteAndDrop({
         resetDragHint();
         return;
       }
-      if (!isDropInsideElement(dropZone, position)) {
+      const isInsideByPosition = point ? isDropInsideElement(dropZone, point) : false;
+      const isInsideByBridgeHint = window.__fileTreeDragOverChat === true;
+      if (!isInsideByPosition && !isInsideByBridgeHint) {
         window.__fileTreeDragOverChat = false;
         clearFileTreeDragBridge();
         resetDragHint();

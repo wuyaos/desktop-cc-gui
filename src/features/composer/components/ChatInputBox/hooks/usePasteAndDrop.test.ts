@@ -200,6 +200,38 @@ describe("usePasteAndDrop path insertion", () => {
     harness.unmount();
   });
 
+  it("keeps internal drag overlay and drop behavior when document drag events report zero coordinates", () => {
+    const harness = createHarness();
+    window.__fileTreeDragPaths = ["/tmp/from-document-drop-zero.ts"];
+    window.__fileTreeDragStamp = Date.now();
+    window.__fileTreeDragActive = true;
+    window.__fileTreeDragOverChat = true;
+    window.__fileTreeDragPosition = { x: 10, y: 10 };
+
+    const dragOverEvent = new Event("dragover", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragOverEvent, "clientX", { value: 0 });
+    Object.defineProperty(dragOverEvent, "clientY", { value: 0 });
+    act(() => {
+      document.dispatchEvent(dragOverEvent);
+    });
+
+    expect(harness.result.isDragOver).toBe(true);
+    expect(harness.result.dragPreviewNames).toEqual(["from-document-drop-zero.ts"]);
+
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "clientX", { value: 0 });
+    Object.defineProperty(dropEvent, "clientY", { value: 0 });
+    act(() => {
+      document.dispatchEvent(dropEvent);
+    });
+
+    expect(harness.editable.textContent).toContain("@/tmp/from-document-drop-zero.ts");
+    expect(window.__fileTreeDragPaths).toBeUndefined();
+    expect(window.__fileTreeDragStamp).toBeUndefined();
+    expect(window.__fileTreeDragActive).toBeUndefined();
+    harness.unmount();
+  });
+
   it("does not clear file-tree bridge on document dragend before source dragend fallback", () => {
     const harness = createHarness();
     window.__fileTreeDragPaths = ["/tmp/from-tree-dragend.ts"];
