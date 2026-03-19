@@ -1,0 +1,178 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useRef } from 'react';
+import { useKeyboardHandler } from './useKeyboardHandler.js';
+import { resolveUndoRedoShortcutAction, type ShortcutPlatform } from '../utils/undoRedoShortcut.js';
+
+function Harness({
+  isIncrementalUndoRedoEnabled = true,
+  onUndoRedoAction = vi.fn(),
+  onSubmit = vi.fn(),
+  platform = 'windows',
+}: {
+  isIncrementalUndoRedoEnabled?: boolean;
+  onUndoRedoAction?: (action: 'undo' | 'redo') => void;
+  onSubmit?: () => void;
+  platform?: ShortcutPlatform;
+}) {
+  const editableRef = useRef<HTMLDivElement | null>(null);
+  const isComposingRef = useRef(false);
+  const lastCompositionEndTimeRef = useRef(0);
+  const completionSelectedRef = useRef(false);
+  const submittedOnEnterRef = useRef(false);
+
+  const closedCompletion = {
+    isOpen: false,
+    handleKeyDown: () => false,
+  };
+
+  const { onKeyDown, onKeyUp } = useKeyboardHandler({
+    editableRef,
+    isComposingRef,
+    lastCompositionEndTimeRef,
+    sendShortcut: 'enter',
+    sdkStatusLoading: false,
+    sdkInstalled: true,
+    fileCompletion: closedCompletion,
+    memoryCompletion: closedCompletion,
+    commandCompletion: closedCompletion,
+    skillCompletion: closedCompletion,
+    agentCompletion: closedCompletion,
+    promptCompletion: closedCompletion,
+    isIncrementalUndoRedoEnabled,
+    resolveUndoRedoAction: (event) => resolveUndoRedoShortcutAction(event, platform),
+    handleUndoRedoAction: onUndoRedoAction,
+    handleMacCursorMovement: (_event: ReactKeyboardEvent<HTMLDivElement>) => false,
+    handleHistoryKeyDown: () => false,
+    completionSelectedRef,
+    submittedOnEnterRef,
+    handleSubmit: onSubmit,
+  });
+
+  return (
+    <div>
+      <input data-testid="other-input" />
+      <div
+        ref={editableRef}
+        data-testid="editable"
+        tabIndex={0}
+        contentEditable
+        onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
+        suppressContentEditableWarning
+      />
+    </div>
+  );
+}
+
+describe('useKeyboardHandler undo/redo integration', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('intercepts ctrl+z and delegates to custom undo handler', () => {
+    const onUndoRedoAction = vi.fn();
+    const onSubmit = vi.fn();
+    render(<Harness onUndoRedoAction={onUndoRedoAction} onSubmit={onSubmit} />);
+
+    const editable = screen.getByTestId('editable');
+    Object.defineProperty(editable, 'isContentEditable', {
+      value: true,
+      configurable: true,
+    });
+    (editable as HTMLDivElement).focus();
+
+    fireEvent.keyDown(editable, { key: 'z', ctrlKey: true });
+
+    expect(onUndoRedoAction).toHaveBeenCalledWith('undo');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('does not intercept when editable is not focused', () => {
+    const onUndoRedoAction = vi.fn();
+    render(<Harness onUndoRedoAction={onUndoRedoAction} />);
+
+    const editable = screen.getByTestId('editable');
+    Object.defineProperty(editable, 'isContentEditable', {
+      value: true,
+      configurable: true,
+    });
+    const otherInput = screen.getByTestId('other-input');
+    (otherInput as HTMLInputElement).focus();
+
+    fireEvent.keyDown(editable, { key: 'z', ctrlKey: true });
+    expect(onUndoRedoAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps existing enter-submit behavior', () => {
+    const onSubmit = vi.fn();
+    render(<Harness onSubmit={onSubmit} />);
+
+    const editable = screen.getByTestId('editable');
+    Object.defineProperty(editable, 'isContentEditable', {
+      value: true,
+      configurable: true,
+    });
+    (editable as HTMLDivElement).focus();
+
+    fireEvent.keyDown(editable, { key: 'Enter' });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back when incremental undo/redo feature is disabled', () => {
+    const onUndoRedoAction = vi.fn();
+    render(
+      <Harness
+        isIncrementalUndoRedoEnabled={false}
+        onUndoRedoAction={onUndoRedoAction}
+      />
+    );
+
+    const editable = screen.getByTestId('editable');
+    Object.defineProperty(editable, 'isContentEditable', {
+      value: true,
+      configurable: true,
+    });
+    (editable as HTMLDivElement).focus();
+
+    fireEvent.keyDown(editable, { key: 'z', ctrlKey: true });
+    expect(onUndoRedoAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps undo/redo mapping consistent across mac/windows/linux', () => {
+    const scenarios: Array<{
+      platform: ShortcutPlatform;
+      event: { key: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean };
+      expected: 'undo' | 'redo';
+    }> = [
+      { platform: 'mac', event: { key: 'z', metaKey: true }, expected: 'undo' },
+      { platform: 'mac', event: { key: 'z', metaKey: true, shiftKey: true }, expected: 'redo' },
+      { platform: 'windows', event: { key: 'z', ctrlKey: true }, expected: 'undo' },
+      { platform: 'windows', event: { key: 'y', ctrlKey: true }, expected: 'redo' },
+      { platform: 'windows', event: { key: 'z', ctrlKey: true, shiftKey: true }, expected: 'redo' },
+      { platform: 'linux', event: { key: 'z', ctrlKey: true }, expected: 'undo' },
+      { platform: 'linux', event: { key: 'z', ctrlKey: true, shiftKey: true }, expected: 'redo' },
+    ];
+
+    for (const scenario of scenarios) {
+      const onUndoRedoAction = vi.fn();
+      render(
+        <Harness
+          platform={scenario.platform}
+          onUndoRedoAction={onUndoRedoAction}
+        />
+      );
+      const editable = screen.getByTestId('editable');
+      Object.defineProperty(editable, 'isContentEditable', {
+        value: true,
+        configurable: true,
+      });
+      (editable as HTMLDivElement).focus();
+      fireEvent.keyDown(editable, scenario.event);
+      expect(onUndoRedoAction).toHaveBeenCalledWith(scenario.expected);
+      cleanup();
+    }
+  });
+});

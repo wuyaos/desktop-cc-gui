@@ -31,6 +31,12 @@ interface UsePasteAndDropOptions {
   fileCompletion: { close: () => void };
   commandCompletion: { close: () => void };
   handleInput: (isComposingFromEvent?: boolean) => void;
+  stageNextCommitOptions?: (options: {
+    source: 'programmatic';
+    forceNewTransaction?: boolean;
+    inputType?: string;
+    timestamp?: number;
+  }) => void;
   /** Immediately flush pending debounced onInput to sync parent state */
   flushInput: () => void;
 }
@@ -219,6 +225,7 @@ export function usePasteAndDrop({
   fileCompletion,
   commandCompletion,
   handleInput,
+  stageNextCommitOptions,
   flushInput,
 }: UsePasteAndDropOptions): UsePasteAndDropReturn {
   const lastDropSignatureRef = useRef<{ signature: string; time: number } | null>(null);
@@ -241,6 +248,8 @@ export function usePasteAndDrop({
         renderFileTags,
         setHasContent,
         onInput,
+        handleInput,
+        stageNextCommitOptions,
         fileCompletion,
         commandCompletion,
         flushInput,
@@ -254,6 +263,8 @@ export function usePasteAndDrop({
       renderFileTags,
       setHasContent,
       onInput,
+      handleInput,
+      stageNextCommitOptions,
       fileCompletion,
       commandCompletion,
       flushInput,

@@ -9,6 +9,13 @@ type InsertFilePathReferencesArgs = {
   renderFileTags: () => void;
   setHasContent: (hasContent: boolean) => void;
   onInput?: (content: string) => void;
+  handleInput?: () => void;
+  stageNextCommitOptions?: (options: {
+    source: 'programmatic';
+    forceNewTransaction?: boolean;
+    inputType?: string;
+    timestamp?: number;
+  }) => void;
   fileCompletion?: { close: () => void };
   commandCompletion?: { close: () => void };
   flushInput?: () => void;
@@ -88,6 +95,8 @@ export function insertFilePathReferences({
   renderFileTags,
   setHasContent,
   onInput,
+  handleInput,
+  stageNextCommitOptions,
   fileCompletion,
   commandCompletion,
   flushInput,
@@ -119,7 +128,16 @@ export function insertFilePathReferences({
   const newText = getTextContent();
   setHasContent(!!newText.trim());
   adjustHeight();
-  onInput?.(newText);
+  stageNextCommitOptions?.({
+    source: 'programmatic',
+    forceNewTransaction: true,
+    inputType: 'insert:file-reference',
+  });
+  if (handleInput) {
+    handleInput();
+  } else {
+    onInput?.(newText);
+  }
   flushInput?.();
   setTimeout(() => {
     renderFileTags();

@@ -277,3 +277,92 @@ export function setVirtualCursorPosition(
     return false;
   }
 }
+
+/**
+ * Get the virtual selection range in a contenteditable element.
+ *
+ * Returns selection start/end offsets based on the same virtual text model used by
+ * getTextContent() (file tags count as "@filepath").
+ */
+export function getVirtualSelectionRange(
+  element: HTMLElement
+): { start: number; end: number } | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const activeRange = selection.getRangeAt(0);
+  if (!element.contains(activeRange.commonAncestorContainer)) {
+    return null;
+  }
+
+  const activeClone = activeRange.cloneRange();
+  const end = getVirtualCursorPosition(element);
+  if (activeClone.collapsed) {
+    return { start: end, end };
+  }
+
+  const collapsedToStart = activeClone.cloneRange();
+  collapsedToStart.collapse(true);
+
+  selection.removeAllRanges();
+  selection.addRange(collapsedToStart);
+  const start = getVirtualCursorPosition(element);
+
+  selection.removeAllRanges();
+  selection.addRange(activeClone);
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
+/**
+ * Set virtual selection range in a contenteditable element.
+ */
+export function setVirtualSelectionRange(
+  element: HTMLElement,
+  start: number,
+  end: number
+): boolean {
+  const normalizedStart = Math.max(0, Math.floor(start));
+  const normalizedEnd = Math.max(0, Math.floor(end));
+
+  if (normalizedStart === normalizedEnd) {
+    return setVirtualCursorPosition(element, normalizedStart);
+  }
+
+  const selection = window.getSelection();
+  if (!selection) {
+    return false;
+  }
+
+  if (!setVirtualCursorPosition(element, normalizedStart)) {
+    return false;
+  }
+  if (!selection.rangeCount) {
+    return false;
+  }
+  const startRange = selection.getRangeAt(0);
+  const startNode = startRange.startContainer;
+  const startOffset = startRange.startOffset;
+
+  if (!setVirtualCursorPosition(element, normalizedEnd)) {
+    return false;
+  }
+  if (!selection.rangeCount) {
+    return false;
+  }
+  const endRange = selection.getRangeAt(0);
+  const endNode = endRange.startContainer;
+  const endOffset = endRange.startOffset;
+
+  try {
+    const mergedRange = document.createRange();
+    mergedRange.setStart(startNode, startOffset);
+    mergedRange.setEnd(endNode, endOffset);
+    selection.removeAllRanges();
+    selection.addRange(mergedRange);
+    return true;
+  } catch {
+    return false;
+  }
+}

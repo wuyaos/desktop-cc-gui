@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from 'react';
+import type { UndoRedoShortcutAction } from '../utils/undoRedoShortcut.js';
 
 interface CompletionWithKeyDown {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface InlineCompletionHandler {
 }
 
 export interface UseKeyboardHandlerOptions {
+  editableRef: MutableRefObject<HTMLDivElement | null>;
   isComposingRef: MutableRefObject<boolean>;
   lastCompositionEndTimeRef: MutableRefObject<number>;
   sendShortcut: 'enter' | 'cmdEnter';
@@ -22,6 +24,9 @@ export interface UseKeyboardHandlerOptions {
   skillCompletion: CompletionWithKeyDown;
   agentCompletion: CompletionWithKeyDown;
   promptCompletion: CompletionWithKeyDown;
+  isIncrementalUndoRedoEnabled: boolean;
+  resolveUndoRedoAction: (event: KeyboardEvent) => UndoRedoShortcutAction;
+  handleUndoRedoAction: (action: Exclude<UndoRedoShortcutAction, null>) => void;
   handleMacCursorMovement: (e: ReactKeyboardEvent<HTMLDivElement>) => boolean;
   handleHistoryKeyDown: (e: {
     key: string;
@@ -49,6 +54,7 @@ export interface UseKeyboardHandlerOptions {
  * - Preventing IME "confirm enter" false send
  */
 export function useKeyboardHandler({
+  editableRef,
   isComposingRef,
   lastCompositionEndTimeRef,
   sendShortcut,
@@ -60,6 +66,9 @@ export function useKeyboardHandler({
   skillCompletion,
   agentCompletion,
   promptCompletion,
+  isIncrementalUndoRedoEnabled,
+  resolveUndoRedoAction,
+  handleUndoRedoAction,
   handleMacCursorMovement,
   handleHistoryKeyDown,
   inlineCompletion,
@@ -82,6 +91,22 @@ export function useKeyboardHandler({
         ((e.key === 'a' || e.key === 'A') && e.ctrlKey && !e.metaKey) ||
         ((e.key === 'e' || e.key === 'E') && e.ctrlKey && !e.metaKey);
       if (isCursorMovementKey) return;
+
+      const undoRedoAction = resolveUndoRedoAction(e.nativeEvent);
+      if (undoRedoAction) {
+        const activeEditable = editableRef.current;
+        const isFocusedEditable =
+          !!activeEditable &&
+          document.activeElement === activeEditable &&
+          activeEditable.isContentEditable;
+
+        if (isIncrementalUndoRedoEnabled && isFocusedEditable) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleUndoRedoAction(undoRedoAction);
+          return;
+        }
+      }
 
       if (fileCompletion.isOpen) {
         const handled = fileCompletion.handleKeyDown(e.nativeEvent);
@@ -170,6 +195,7 @@ export function useKeyboardHandler({
       handleSubmit();
     },
     [
+      editableRef,
       isComposingRef,
       handleMacCursorMovement,
       fileCompletion,
@@ -178,6 +204,9 @@ export function useKeyboardHandler({
       skillCompletion,
       agentCompletion,
       promptCompletion,
+      isIncrementalUndoRedoEnabled,
+      resolveUndoRedoAction,
+      handleUndoRedoAction,
       handleHistoryKeyDown,
       inlineCompletion,
       lastCompositionEndTimeRef,

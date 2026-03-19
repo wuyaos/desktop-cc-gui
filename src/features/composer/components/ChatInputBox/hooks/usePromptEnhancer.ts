@@ -12,7 +12,13 @@ interface UsePromptEnhancerOptions {
   getTextContent: () => string;
   selectedModel: string;
   setHasContent: (hasContent: boolean) => void;
-  onInput?: (content: string) => void;
+  handleInput: () => void;
+  stageNextCommitOptions?: (options: {
+    source: 'programmatic';
+    forceNewTransaction?: boolean;
+    inputType?: string;
+    timestamp?: number;
+  }) => void;
 }
 
 interface UsePromptEnhancerReturn {
@@ -45,7 +51,8 @@ export function usePromptEnhancer({
   getTextContent,
   selectedModel,
   setHasContent,
-  onInput,
+  handleInput,
+  stageNextCommitOptions,
 }: UsePromptEnhancerOptions): UsePromptEnhancerReturn {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [showEnhancerDialog, setShowEnhancerDialog] = useState(false);
@@ -83,11 +90,16 @@ export function usePromptEnhancer({
       // Replace input box content with enhanced prompt
       editableRef.current.innerText = enhancedPrompt;
       setHasContent(true);
-      onInput?.(enhancedPrompt);
+      stageNextCommitOptions?.({
+        source: 'programmatic',
+        forceNewTransaction: true,
+        inputType: 'prompt:enhancer',
+      });
+      handleInput();
     }
     setShowEnhancerDialog(false);
     setIsEnhancing(false);
-  }, [enhancedPrompt, editableRef, setHasContent, onInput]);
+  }, [enhancedPrompt, editableRef, setHasContent, handleInput, stageNextCommitOptions]);
 
   /**
    * Handle keep original prompt

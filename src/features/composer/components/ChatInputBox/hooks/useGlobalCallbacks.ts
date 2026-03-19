@@ -10,6 +10,13 @@ interface UseGlobalCallbacksOptions {
   renderFileTags: () => void;
   setHasContent: (hasContent: boolean) => void;
   onInput?: (content: string) => void;
+  handleInput: () => void;
+  stageNextCommitOptions?: (options: {
+    source: 'programmatic';
+    forceNewTransaction?: boolean;
+    inputType?: string;
+    timestamp?: number;
+  }) => void;
   fileCompletion: { close: () => void };
   commandCompletion: { close: () => void };
   focusInput: () => void;
@@ -30,6 +37,8 @@ export function useGlobalCallbacks({
   renderFileTags,
   setHasContent,
   onInput,
+  handleInput,
+  stageNextCommitOptions,
   fileCompletion,
   commandCompletion,
   focusInput,
@@ -70,6 +79,8 @@ export function useGlobalCallbacks({
         renderFileTags,
         setHasContent,
         onInput,
+        handleInput,
+        stageNextCommitOptions,
         fileCompletion,
         commandCompletion,
       });
@@ -98,6 +109,8 @@ export function useGlobalCallbacks({
     renderFileTags,
     setHasContent,
     onInput,
+    handleInput,
+    stageNextCommitOptions,
     fileCompletion,
     commandCompletion,
     focusInput,
@@ -153,7 +166,12 @@ export function useGlobalCallbacks({
       const newText = getTextContent();
       setHasContent(!!newText.trim());
       adjustHeight();
-      onInput?.(newText);
+      stageNextCommitOptions?.({
+        source: 'programmatic',
+        forceNewTransaction: true,
+        inputType: 'insert:code-snippet',
+      });
+      handleInput();
 
       // Immediately render file tags
       setTimeout(() => {
@@ -166,5 +184,14 @@ export function useGlobalCallbacks({
     return () => {
       delete window.insertCodeSnippetAtCursor;
     };
-  }, [editableRef, getTextContent, renderFileTags, adjustHeight, onInput, setHasContent]);
+  }, [
+    editableRef,
+    getTextContent,
+    renderFileTags,
+    adjustHeight,
+    onInput,
+    setHasContent,
+    handleInput,
+    stageNextCommitOptions,
+  ]);
 }
