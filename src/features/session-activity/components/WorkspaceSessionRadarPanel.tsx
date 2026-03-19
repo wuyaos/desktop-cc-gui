@@ -18,6 +18,18 @@ type WorkspaceSessionRadarPanelProps = {
 const RADAR_READ_STATE_KEY = "sessionRadar.readStateById";
 const RADAR_DATE_COLLAPSE_STATE_KEY = "sessionRadar.collapsedDateGroups";
 const RADAR_STORE_NAME = "leida";
+const WORKSPACE_ACCENT_PALETTE = [
+  "#c2410c",
+  "#d97706",
+  "#ca8a04",
+  "#a16207",
+  "#b45309",
+  "#9a3412",
+  "#be123c",
+  "#a21caf",
+  "#7c2d12",
+  "#78350f",
+];
 
 function formatActivityTime(timestamp: number) {
   return new Intl.DateTimeFormat(undefined, {
@@ -51,6 +63,18 @@ function formatDateKey(timestamp: number) {
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
   const day = `${date.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function resolveWorkspaceAccent(workspaceSeed: string) {
+  if (!workspaceSeed) {
+    return WORKSPACE_ACCENT_PALETTE[0];
+  }
+  let hash = 0;
+  for (let index = 0; index < workspaceSeed.length; index += 1) {
+    hash = (hash * 31 + workspaceSeed.charCodeAt(index)) | 0;
+  }
+  const paletteIndex = Math.abs(hash) % WORKSPACE_ACCENT_PALETTE.length;
+  return WORKSPACE_ACCENT_PALETTE[paletteIndex];
 }
 
 export function WorkspaceSessionRadarPanel({
@@ -129,6 +153,7 @@ export function WorkspaceSessionRadarPanel({
                   markEntryAsRead(entry);
                   onSelectThread(entry.workspaceId, entry.threadId);
                 }}
+                aria-label={entry.threadName}
                 title={entry.threadName}
               >
                 {!entry.isProcessing ? (
@@ -161,7 +186,12 @@ export function WorkspaceSessionRadarPanel({
                     >
                       <EngineIcon engine={resolveEngine(entry)} size={13} />
                     </span>
-                    <span className="session-activity-radar-workspace">{entry.workspaceName}</span>
+                    <span
+                      className="session-activity-radar-workspace"
+                      style={{ color: resolveWorkspaceAccent(entry.workspaceId || entry.workspaceName) }}
+                    >
+                      {entry.workspaceName}
+                    </span>
                     <span>
                       {t("activityPanel.radar.startedAt")}{" "}
                       {entry.startedAt ? formatActivityTime(entry.startedAt) : t("activityPanel.radar.timeUnknown")}
@@ -174,7 +204,6 @@ export function WorkspaceSessionRadarPanel({
                       {t("activityPanel.radar.totalDuration")} {formatDuration(entry.durationMs, t)}
                     </span>
                   </span>
-                  <span className="session-activity-radar-row-title">{entry.threadName}</span>
                   <span className="session-activity-radar-row-preview">
                     {entry.preview || t("activityPanel.commandPendingSummary")}
                   </span>
@@ -256,6 +285,7 @@ export function WorkspaceSessionRadarPanel({
                               markEntryAsRead(entry);
                               onSelectThread(entry.workspaceId, entry.threadId);
                             }}
+                            aria-label={entry.threadName}
                             title={entry.threadName}
                           >
                             <span
@@ -284,7 +314,12 @@ export function WorkspaceSessionRadarPanel({
                                 >
                                   <EngineIcon engine={resolveEngine(entry)} size={13} />
                                 </span>
-                                <span className="session-activity-radar-workspace">{entry.workspaceName}</span>
+                                <span
+                                  className="session-activity-radar-workspace"
+                                  style={{ color: resolveWorkspaceAccent(entry.workspaceId || entry.workspaceName) }}
+                                >
+                                  {entry.workspaceName}
+                                </span>
                                 <span>
                                   {t("activityPanel.radar.startedAt")}{" "}
                                   {entry.startedAt
@@ -301,7 +336,6 @@ export function WorkspaceSessionRadarPanel({
                                   {t("activityPanel.radar.totalDuration")} {formatDuration(entry.durationMs, t)}
                                 </span>
                               </span>
-                              <span className="session-activity-radar-row-title">{entry.threadName}</span>
                               <span className="session-activity-radar-row-preview">
                                 {entry.preview || t("activityPanel.commandPendingSummary")}
                               </span>

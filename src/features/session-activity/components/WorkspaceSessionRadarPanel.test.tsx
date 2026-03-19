@@ -66,7 +66,7 @@ describe("WorkspaceSessionRadarPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /Running Thread/i }));
     expect(onSelectThread).toHaveBeenCalledWith("w1", "t1");
     fireEvent.click(dateGroupToggle);
-    expect(screen.getByText("Recent Thread")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Recent Thread$/i })).toBeTruthy();
     expect(screen.getAllByLabelText("activityPanel.radar.unreadMark")).toHaveLength(2);
     expect(screen.queryByText("activityPanel.radar.openSession")).toBeNull();
 
