@@ -10,6 +10,8 @@ use tokio::time::timeout;
 use crate::backend::app_server::build_codex_path_env;
 use crate::types::{CodexProviderConfig, ProviderConfig};
 use crate::utils::async_command;
+#[cfg(windows)]
+use crate::utils::async_command_with_console_visibility;
 
 // ==================== Claude Settings Sync ====================
 
@@ -499,6 +501,22 @@ fn sanitize_env_map(input: BTreeMap<String, String>) -> HashMap<String, String> 
     output
 }
 
+fn build_preflight_command(candidate: &str) -> Command {
+    #[cfg(windows)]
+    {
+        // Some .cmd/.bat wrappers can fail with hidden console + piped stdio.
+        let lower = candidate.to_ascii_lowercase();
+        if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+            return async_command_with_console_visibility(candidate, false);
+        }
+        return async_command(candidate);
+    }
+    #[cfg(not(windows))]
+    {
+        async_command(candidate)
+    }
+}
+
 async fn run_preflight_probe(
     command_candidates: &[&str],
     args: &[&str],
@@ -507,7 +525,7 @@ async fn run_preflight_probe(
     let mut last_error: Option<String> = None;
 
     for candidate in command_candidates {
-        let mut cmd: Command = async_command(candidate);
+        let mut cmd: Command = build_preflight_command(candidate);
         if let Some(path) = &path_env {
             cmd.env("PATH", path);
         }
@@ -862,9 +880,10 @@ pub(crate) async fn vendor_save_gemini_settings(
 
 #[tauri::command]
 pub(crate) async fn vendor_gemini_preflight() -> Result<GeminiVendorPreflightResult, String> {
-    let gemini_result = run_preflight_probe(&["gemini", "gemini.cmd"], &["--version"]).await;
+    let gemini_result =
+        run_preflight_probe(&["gemini", "gemini.cmd", "gemini.exe"], &["--version"]).await;
     let node_result = run_preflight_probe(&["node", "node.exe"], &["--version"]).await;
-    let npm_result = run_preflight_probe(&["npm", "npm.cmd"], &["--version"]).await;
+    let npm_result = run_preflight_probe(&["npm", "npm.cmd", "npm.exe"], &["--version"]).await;
 
     let checks = vec![
         build_preflight_check("gemini_version", "Gemini CLI", gemini_result),

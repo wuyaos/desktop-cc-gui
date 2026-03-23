@@ -287,7 +287,7 @@ export function GeminiVendorPanel() {
               id="gemini-google-application-credentials"
               className="vendor-input"
               value={draft.googleApplicationCredentials}
-              placeholder="/path/to/service-account.json"
+              placeholder="<service-account-json-path>"
               onChange={(event) => {
                 handleGeminiFieldChange(
                   "googleApplicationCredentials",
