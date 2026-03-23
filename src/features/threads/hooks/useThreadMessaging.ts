@@ -684,7 +684,11 @@ export function useThreadMessaging({
         resolvedModel &&
         !resolvedModel.startsWith("claude-")
           ? null
-          : resolvedModel;
+          : resolvedEngine === "codex" &&
+              resolvedModel &&
+              resolvedModel.startsWith("claude-")
+            ? null
+            : resolvedModel;
       const sanitizedOpenCodeModel =
         resolvedEngine === "opencode"
           ? sanitizeOpenCodeModel(sanitizedModel)

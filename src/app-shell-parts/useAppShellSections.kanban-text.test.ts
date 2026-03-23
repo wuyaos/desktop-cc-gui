@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolvePendingSessionThreadCandidate,
+  shouldSyncComposerEngineForKanbanExecution,
   resolveTaskThreadId,
   stripComposerKanbanTagsPreserveFormatting,
 } from "./useAppShellSections";
@@ -73,5 +74,27 @@ describe("resolvePendingSessionThreadCandidate", () => {
       occupiedThreadIds: new Set<string>(),
     });
     expect(resolved).toBeNull();
+  });
+});
+
+describe("shouldSyncComposerEngineForKanbanExecution", () => {
+  it("returns false for background execution", () => {
+    expect(
+      shouldSyncComposerEngineForKanbanExecution({
+        activate: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true when activate is true", () => {
+    expect(
+      shouldSyncComposerEngineForKanbanExecution({
+        activate: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("defaults to true when activate is omitted", () => {
+    expect(shouldSyncComposerEngineForKanbanExecution({})).toBe(true);
   });
 });

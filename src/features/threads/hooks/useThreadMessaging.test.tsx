@@ -259,6 +259,29 @@ describe("useThreadMessaging", () => {
     );
   });
 
+  it("sanitizes leaked claude model for codex", async () => {
+    const { result } = makeHook("codex");
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "hello codex",
+        [],
+        { model: "claude-sonnet-4-5" },
+      );
+    });
+
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "hello codex",
+      expect.objectContaining({
+        model: null,
+      }),
+    );
+  });
+
   it("does not trigger auto title generation for opencode", async () => {
     const { result } = makeHook("opencode");
 

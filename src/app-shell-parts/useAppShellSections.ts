@@ -86,6 +86,12 @@ export function resolvePendingSessionThreadCandidate(params: {
   return candidates.length === 1 ? candidates[0] : null;
 }
 
+export function shouldSyncComposerEngineForKanbanExecution(params: {
+  activate?: boolean;
+}): boolean {
+  return params.activate !== false;
+}
+
 export function useAppShellSections(ctx: any) {
   const {
     activeWorkspace,
@@ -845,16 +851,25 @@ export function useAppShellSections(ctx: any) {
 
         await connectWorkspace(workspace);
         const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
-        await setActiveEngine(engine);
-
+        const shouldSyncComposerSelection = shouldSyncComposerEngineForKanbanExecution({
+          activate: params.activate,
+        });
+        if (shouldSyncComposerSelection) {
+          await setActiveEngine(engine);
+        }
+        let outboundModel: string | undefined;
         if (task.modelId) {
-          if (engine === "codex") {
-            setSelectedModelId(task.modelId);
+          if (shouldSyncComposerSelection) {
+            if (engine === "codex") {
+              setSelectedModelId(task.modelId);
+            } else {
+              setEngineSelectedModelIdByType((prev) => ({
+                ...prev,
+                [engine]: task.modelId,
+              }));
+            }
           } else {
-            setEngineSelectedModelIdByType((prev) => ({
-              ...prev,
-              [engine]: task.modelId,
-            }));
+            outboundModel = task.modelId;
           }
         }
 
@@ -881,7 +896,9 @@ export function useAppShellSections(ctx: any) {
           ? `${params.injectedPrefix}\n\n${baseMessage}`
           : baseMessage;
         if (firstMessage) {
-          await sendUserMessageToThread(workspace, threadId, firstMessage, task.images ?? []);
+          await sendUserMessageToThread(workspace, threadId, firstMessage, task.images ?? [], {
+            ...(outboundModel ? { model: outboundModel } : {}),
+          });
         }
 
         kanbanUpdateTask(task.id, { status: "inprogress" });
