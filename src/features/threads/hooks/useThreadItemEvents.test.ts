@@ -417,6 +417,47 @@ describe("useThreadItemEvents", () => {
     expect(markProcessing).not.toHaveBeenCalled();
   });
 
+  it("skips gemini item snapshots for interrupted threads", () => {
+    const { result, dispatch, markProcessing, interruptedThreadsRef, safeMessageActivity } =
+      makeOptions();
+    interruptedThreadsRef.current.add("gemini:session-1");
+
+    act(() => {
+      result.current.onItemStarted("ws-1", "gemini:session-1", {
+        type: "commandExecution",
+        id: "tool-1",
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(safeMessageActivity).not.toHaveBeenCalled();
+  });
+
+  it("skips gemini completed agent snapshots for interrupted threads", () => {
+    const {
+      result,
+      dispatch,
+      interruptedThreadsRef,
+      onAgentMessageCompletedExternal,
+    } = makeOptions({
+      onAgentMessageCompletedExternal: vi.fn(),
+    });
+    interruptedThreadsRef.current.add("gemini:session-1");
+
+    act(() => {
+      result.current.onAgentMessageCompleted({
+        workspaceId: "ws-1",
+        threadId: "gemini:session-1",
+        itemId: "assistant-1",
+        text: "late arriving text",
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(onAgentMessageCompletedExternal).not.toHaveBeenCalled();
+  });
+
   it("bypasses realtime batching for gemini agent deltas", () => {
     vi.useFakeTimers();
     window.localStorage.setItem("mossx.perf.realtimeBatching", "1");

@@ -870,6 +870,9 @@ export function useThreadMessaging({
         threadId,
         timestamp,
       });
+      if (resolvedEngine === "gemini") {
+        interruptedThreadsRef.current.delete(threadId);
+      }
       markProcessing(threadId, true);
       safeMessageActivity();
       onDebug?.({

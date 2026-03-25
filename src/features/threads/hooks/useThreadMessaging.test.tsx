@@ -143,6 +143,8 @@ describe("useThreadMessaging", () => {
     const safeMessageActivity = vi.fn();
     const pushThreadErrorMessage = vi.fn();
     const onDebug = vi.fn();
+    const pendingInterruptsRef = { current: new Set<string>() };
+    const interruptedThreadsRef = { current: new Set<string>() };
 
     const startThreadForWorkspace =
       overrides.startThreadForWorkspace ??
@@ -164,8 +166,8 @@ describe("useThreadMessaging", () => {
         activeTurnIdByThread: overrides.activeTurnIdByThread ?? {},
         tokenUsageByThread: {},
         rateLimitsByWorkspace: {},
-        pendingInterruptsRef: { current: new Set<string>() },
-        interruptedThreadsRef: { current: new Set<string>() },
+        pendingInterruptsRef,
+        interruptedThreadsRef,
         dispatch,
         getCustomName: () => undefined,
         getThreadEngine: (_workspaceId, threadId) =>
@@ -195,6 +197,8 @@ describe("useThreadMessaging", () => {
       safeMessageActivity,
       pushThreadErrorMessage,
       onDebug,
+      pendingInterruptsRef,
+      interruptedThreadsRef,
     };
   }
 
@@ -322,6 +326,28 @@ describe("useThreadMessaging", () => {
       expect.objectContaining({
         engine: "gemini",
         model: "123",
+      }),
+    );
+  });
+
+  it("clears gemini interrupted guard before a new send starts", async () => {
+    const { result, interruptedThreadsRef } = makeHook("gemini");
+    interruptedThreadsRef.current.add("gemini:session-1");
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "gemini:session-1",
+        "hello again",
+      );
+    });
+
+    expect(interruptedThreadsRef.current.has("gemini:session-1")).toBe(false);
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "gemini",
+        threadId: "gemini:session-1",
       }),
     );
   });

@@ -831,6 +831,7 @@ impl GeminiSession {
                         if !session_started_emitted {
                             session_started_emitted = true;
                             new_session_id = Some(session_id.clone());
+                            self.set_session_id(Some(session_id.clone())).await;
                             self.emit_turn_event(
                                 turn_id,
                                 EngineEvent::SessionStarted {

@@ -33,6 +33,13 @@ function isGeminiThread(threadId: string) {
   return threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-");
 }
 
+function shouldIgnoreInterruptedGeminiThread(
+  interruptedThreadsRef: MutableRefObject<Set<string>>,
+  threadId: string,
+) {
+  return isGeminiThread(threadId) && interruptedThreadsRef.current.has(threadId);
+}
+
 function isClaudeStreamDebugEnabled() {
   if (typeof window === "undefined") {
     return false;
@@ -210,6 +217,9 @@ export function useThreadItemEvents({
         markedProcessingThreads?: Set<string>;
       },
     ) => {
+      if (shouldIgnoreInterruptedGeminiThread(interruptedThreadsRef, operation.threadId)) {
+        return;
+      }
       const ensuredThreads = context?.ensuredThreads;
       const markedProcessingThreads = context?.markedProcessingThreads;
       if (!ensuredThreads || !ensuredThreads.has(operation.threadId)) {
@@ -279,7 +289,7 @@ export function useThreadItemEvents({
         delta: operation.delta,
       });
     },
-    [dispatch, getCustomName, markProcessing],
+    [dispatch, getCustomName, interruptedThreadsRef, markProcessing],
   );
 
   const flushRealtimeDeltaOps = useCallback(() => {
@@ -357,6 +367,9 @@ export function useThreadItemEvents({
       shouldMarkProcessing: boolean,
       shouldIncrementAgentSegment: boolean,
     ) => {
+      if (shouldIgnoreInterruptedGeminiThread(interruptedThreadsRef, threadId)) {
+        return;
+      }
       flushRealtimeDeltaOps();
       dispatch({ type: "ensureThread", workspaceId, threadId, engine: inferEngineFromThreadId(threadId) });
       if (shouldMarkProcessing) {
@@ -475,6 +488,7 @@ export function useThreadItemEvents({
       dispatch,
       flushRealtimeDeltaOps,
       getCustomName,
+      interruptedThreadsRef,
       logReasoningRoute,
       markProcessing,
       markReviewing,
@@ -573,6 +587,9 @@ export function useThreadItemEvents({
       itemId: string;
       text: string;
     }) => {
+      if (shouldIgnoreInterruptedGeminiThread(interruptedThreadsRef, threadId)) {
+        return;
+      }
       flushRealtimeDeltaOps();
       const timestamp = Date.now();
       dispatch({ type: "ensureThread", workspaceId, threadId, engine: inferEngineFromThreadId(threadId) });
@@ -620,6 +637,7 @@ export function useThreadItemEvents({
       onAgentMessageCompletedExternal,
       recordThreadActivity,
       safeMessageActivity,
+      interruptedThreadsRef,
     ],
   );
 

@@ -2,7 +2,10 @@ import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import type { DebugEntry } from "../../../types";
 import { useTranslation } from "react-i18next";
-import { interruptTurn as interruptTurnService } from "../../../services/tauri";
+import {
+  engineInterrupt as engineInterruptService,
+  interruptTurn as interruptTurnService,
+} from "../../../services/tauri";
 import { getThreadTimestamp } from "../../../utils/threadItems";
 import {
   asString,
@@ -198,7 +201,10 @@ export function useThreadTurnEvents({
       dispatch({ type: "markContextCompacting", threadId, isCompacting: false });
       if (pendingInterruptsRef.current.has(threadId)) {
         pendingInterruptsRef.current.delete(threadId);
-        if (turnId) {
+        const engine = inferEngineFromThreadId(threadId);
+        if (engine === "gemini") {
+          void engineInterruptService(workspaceId).catch(() => {});
+        } else if (turnId) {
           void interruptTurnService(workspaceId, threadId, turnId).catch(() => {});
         }
         return;
@@ -308,7 +314,11 @@ export function useThreadTurnEvents({
       // suppress the redundant error message since interruptTurn already
       // displayed "Session stopped." to the user.
       const wasInterrupted = interruptedThreadsRef.current.has(threadId);
-      interruptedThreadsRef.current.delete(threadId);
+      const shouldKeepInterruptedGuard =
+        wasInterrupted && inferEngineFromThreadId(threadId) === "gemini";
+      if (!shouldKeepInterruptedGuard) {
+        interruptedThreadsRef.current.delete(threadId);
+      }
 
       dispatch({ type: "ensureThread", workspaceId, threadId, engine: inferEngineFromThreadId(threadId) });
       dispatch({

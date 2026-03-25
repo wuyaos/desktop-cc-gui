@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { interruptTurn } from "../../../services/tauri";
+import { engineInterrupt, interruptTurn } from "../../../services/tauri";
 import {
   normalizePlanUpdate,
   normalizeRateLimits,
@@ -10,6 +10,7 @@ import {
 import { useThreadTurnEvents } from "./useThreadTurnEvents";
 
 vi.mock("../../../services/tauri", () => ({
+  engineInterrupt: vi.fn(),
   interruptTurn: vi.fn(),
 }));
 
@@ -96,6 +97,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
 describe("useThreadTurnEvents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(engineInterrupt).mockResolvedValue();
   });
 
   it("upserts thread summaries when a thread starts", () => {
@@ -298,6 +300,22 @@ describe("useThreadTurnEvents", () => {
 
     expect(pendingInterruptsRef.current.has("thread-1")).toBe(false);
     expect(interruptTurn).toHaveBeenCalledWith("ws-1", "thread-1", "turn-2");
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(setActiveTurnId).not.toHaveBeenCalled();
+  });
+
+  it("routes pending gemini interrupts through engine interrupt only", () => {
+    const { result, markProcessing, setActiveTurnId, pendingInterruptsRef } =
+      makeOptions({ pendingInterrupts: ["gemini:session-1"] });
+    vi.mocked(engineInterrupt).mockResolvedValue();
+
+    act(() => {
+      result.current.onTurnStarted("ws-1", "gemini:session-1", "turn-2");
+    });
+
+    expect(pendingInterruptsRef.current.has("gemini:session-1")).toBe(false);
+    expect(engineInterrupt).toHaveBeenCalledWith("ws-1");
+    expect(interruptTurn).not.toHaveBeenCalled();
     expect(markProcessing).not.toHaveBeenCalled();
     expect(setActiveTurnId).not.toHaveBeenCalled();
   });
@@ -915,6 +933,22 @@ describe("useThreadTurnEvents", () => {
     expect(safeMessageActivity).toHaveBeenCalled();
     // Interrupted flag should be cleared
     expect(interruptedThreadsRef.current.has("thread-1")).toBe(false);
+  });
+
+  it("keeps gemini interrupted flag until a later terminal cleanup", () => {
+    const { result, interruptedThreadsRef, pushThreadErrorMessage } = makeOptions({
+      interruptedThreads: ["gemini:session-1"],
+    });
+
+    act(() => {
+      result.current.onTurnError("ws-1", "gemini:session-1", "turn-1", {
+        message: "Session stopped.",
+        willRetry: false,
+      });
+    });
+
+    expect(pushThreadErrorMessage).not.toHaveBeenCalled();
+    expect(interruptedThreadsRef.current.has("gemini:session-1")).toBe(true);
   });
 
   it("clears interrupted thread flag on turn completed", () => {
