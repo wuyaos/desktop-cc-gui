@@ -2,6 +2,44 @@
 
 ---
 
+##### **2026年3月28日（v0.3.5）**
+
+English:
+
+✨ Features
+- Add detached file explorer window for independent file browsing and operations
+- Support cross-window drag-and-drop from detached file tree into main chat composer
+- Align detached file tree interactions with Git semantics for consistent file operations
+- Improve file-view interaction details and external-change awareness signals
+
+🔧 Improvements
+- Split Git History panel resize control into a dedicated module to improve maintainability and isolate runtime risks
+
+🐛 Fixes
+- Fix Claude model selection regression where 4.6 could fall back to 4.5 unexpectedly
+- Fix Claude session resume path and default-model fallback behavior
+- Deduplicate Codex agent real-time message snapshots to prevent repeated rendering
+- Fix misleading drag cursor affordance on file-tree rows
+
+中文：
+
+✨ Features
+- 新增独立文件窗口（detached file explorer），支持脱离主界面进行文件浏览与操作
+- 支持 detached 文件树跨窗口拖拽落入主聊天输入框
+- 对齐 detached 文件树交互与 Git 语义，统一文件操作体验
+- 优化文件视图交互细节并增强外部变更感知提示
+
+🔧 Improvements
+- 拆分 Git History 面板尺寸控制为独立模块，提升可维护性并隔离运行时风险
+
+🐛 Fixes
+- 修复 Claude 模型选择链路回归：4.6 可能被意外回退到 4.5
+- 修复 Claude 会话续传链路与默认模型回退问题
+- 去重 Codex agent 实时消息快照，避免正文重复渲染
+- 修复文件树行级光标拖拽提示误导问题
+
+---
+
 ##### **2026年3月25日（v0.3.4）**
 
 English:
