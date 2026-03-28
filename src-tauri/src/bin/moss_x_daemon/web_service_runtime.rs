@@ -530,14 +530,40 @@ async fn serve_web_app_index(state: &WebApiState) -> Response {
 
 async fn try_serve_asset_file(state: &WebApiState, relative: &Path) -> Option<Response> {
     let root = state.assets_root.as_ref()?;
-    let absolute = root.join(relative);
-    let metadata = fs::metadata(&absolute).await.ok()?;
-    if !metadata.is_file() {
-        return None;
+    let mut candidates = vec![root.join(relative)];
+
+    // Compatibility fallback: some bundle pipelines may flatten dist/assets/* into dist/*
+    // while index.html still references /assets/*. Try filename at dist root as a backup.
+    if is_assets_relative(relative) {
+        if let Some(file_name) = relative.file_name() {
+            candidates.push(root.join(file_name));
+        }
     }
-    let bytes = fs::read(&absolute).await.ok()?;
-    let content_type = content_type_for_path(relative);
-    Some(response_with_bytes(content_type, bytes))
+
+    for absolute in candidates {
+        let metadata = match fs::metadata(&absolute).await {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let bytes = fs::read(&absolute).await.ok()?;
+        let content_type = content_type_for_path(relative);
+        return Some(response_with_bytes(content_type, bytes));
+    }
+
+    None
+}
+
+fn is_assets_relative(path: &Path) -> bool {
+    match path.components().next() {
+        Some(Component::Normal(value)) => value
+            .to_str()
+            .map(|segment| segment.eq_ignore_ascii_case("assets"))
+            .unwrap_or(false),
+        _ => false,
+    }
 }
 
 fn response_with_bytes(content_type: &str, bytes: Vec<u8>) -> Response {
