@@ -211,7 +211,7 @@ function buildWorkspacePathVariants(path: string): Set<string> {
     variants.add(`/private${normalized}`);
   }
   if (/^[A-Za-z]:/.test(normalized)) {
-    variants.add(`${normalized[0].toLowerCase()}${normalized.slice(1)}`);
+    variants.add(`${normalized.charAt(0).toLowerCase()}${normalized.slice(1)}`);
     variants.add(normalized.toLowerCase());
   }
   if (normalized.startsWith("//")) {

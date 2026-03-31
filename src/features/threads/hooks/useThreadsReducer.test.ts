@@ -12,7 +12,7 @@ describe("threadReducer", () => {
     });
     const threads = next.threadsByWorkspace["ws-1"] ?? [];
     expect(threads).toHaveLength(1);
-    expect(threads[0].name).toBe("Agent 1");
+    expect(threads[0]?.name).toBe("Agent 1");
     expect(next.activeThreadIdByWorkspace["ws-1"]).toBe("thread-1");
     expect(next.threadStatusById["thread-1"]?.isProcessing).toBe(false);
   });

@@ -48,7 +48,7 @@ function cleanCommandText(commandText: string) {
         ? (cmdMatch[2] ?? cmdMatch[3] ?? "")
         : trimmed;
   const cdMatch = inner.match(/^\s*cd\s+[^&;]+(?:\s*&&\s*|\s*;\s*)([\s\S]+)$/i);
-  const stripped = cdMatch ? cdMatch[1] : inner;
+  const stripped = cdMatch?.[1] ?? inner;
   return stripped.trim();
 }
 
@@ -94,8 +94,8 @@ function trimAtPipe(command: string) {
     if (char !== "|" || inSingle || inDouble) {
       continue;
     }
-    const prev = index > 0 ? command[index - 1] : "";
-    const next = index + 1 < command.length ? command[index + 1] : "";
+    const prev = index > 0 ? (command[index - 1] ?? "") : "";
+    const next = index + 1 < command.length ? (command[index + 1] ?? "") : "";
     const prevIsSpace = prev === "" || /\s/.test(prev);
     const nextIsSpace = next === "" || /\s/.test(next);
     if (!prevIsSpace || !nextIsSpace) {
@@ -124,6 +124,9 @@ function collectNonFlagOperands(tokens: string[], commandName: string) {
   const operands: string[] = [];
   for (let index = 1; index < tokens.length; index += 1) {
     const token = tokens[index];
+    if (!token) {
+      continue;
+    }
     if (isOptionToken(token)) {
       if (commandName === "rg" && RG_FLAGS_WITH_VALUES.has(token)) {
         index += 1;
@@ -159,7 +162,7 @@ function isFailedStatus(status?: string) {
 function parseSearch(tokens: string[]): ExploreEntry | null {
   const commandName = tokens[0]?.toLowerCase() ?? "";
   const hasFilesFlag = tokens.some((token) => token === "--files");
-  if (tokens[0] === "rg" && hasFilesFlag) {
+  if ((tokens[0] ?? "") === "rg" && hasFilesFlag) {
     const paths = findPathTokens(tokens);
     const path = paths[paths.length - 1] || "rg --files";
     return { kind: "list", label: path };
@@ -168,7 +171,7 @@ function parseSearch(tokens: string[]): ExploreEntry | null {
   if (positional.length === 0) {
     return null;
   }
-  const query = positional[0];
+  const query = positional[0] ?? "";
   const rawPath = positional.length > 1 ? positional[1] : "";
   const path =
     commandName === "rg" ? rawPath : rawPath && isPathLike(rawPath) ? rawPath : "";
@@ -203,7 +206,7 @@ function parseRead(tokens: string[]): ExploreEntry[] | null {
 function parseList(tokens: string[]): ExploreEntry {
   const paths = findPathTokens(tokens);
   const path = paths[paths.length - 1];
-  return { kind: "list", label: path || tokens[0] };
+  return { kind: "list", label: path || tokens[0] || "list" };
 }
 
 function parseCommandSegment(command: string): ExploreEntry[] | null {
@@ -211,7 +214,7 @@ function parseCommandSegment(command: string): ExploreEntry[] | null {
   if (tokens.length === 0) {
     return null;
   }
-  const commandName = tokens[0].toLowerCase();
+  const commandName = tokens[0]?.toLowerCase() ?? "";
   if (READ_COMMANDS.has(commandName)) {
     return parseRead(tokens);
   }

@@ -143,7 +143,7 @@ function parsePatchFileEntries(text: string): FileChangeEntry[] {
     } else if (trimmed.startsWith("diff --git ")) {
       const rest = trimmed.slice("diff --git ".length).trim();
       const parts = rest.split(/\s+/);
-      const right = parts.length >= 2 ? parts[1] : "";
+      const right = parts.length >= 2 ? (parts[1] ?? "") : "";
       if (right.startsWith("b/")) {
         matched = right.slice(2);
         kind = "modified";
@@ -280,7 +280,8 @@ export function inferFileChangesFromCommandExecutionArtifacts(
     return Array.from(byPath.values()).filter((entry) => entry.path);
   }
 
-  const lines = marker[1].split(/\r?\n/).map((line) => line.trim());
+  const markerBody = marker[1] ?? "";
+  const lines = markerBody.split(/\r?\n/).map((line) => line.trim());
   for (const line of lines) {
     if (!line) {
       continue;
@@ -292,8 +293,8 @@ export function inferFileChangesFromCommandExecutionArtifacts(
       }
       continue;
     }
-    const kind = normalizeFileChangeKind(match[1]);
-    const path = match[2].trim();
+    const kind = normalizeFileChangeKind(match[1] ?? "");
+    const path = (match[2] ?? "").trim();
     if (!path) {
       continue;
     }

@@ -70,9 +70,19 @@ const OPTIMISTIC_USER_ITEM_PREFIX = "optimistic-user-";
 
 type MessageItem = Extract<ConversationItem, { kind: "message" }>;
 type UserMessageItem = MessageItem & { role: "user" };
+type AssistantMessageItem = MessageItem & { role: "assistant" };
+type ToolConversationItem = Extract<ConversationItem, { kind: "tool" }>;
 
-function isUserMessageItem(item: ConversationItem): item is UserMessageItem {
-  return item.kind === "message" && item.role === "user";
+function isUserMessageItem(item: ConversationItem | undefined): item is UserMessageItem {
+  return item?.kind === "message" && item.role === "user";
+}
+
+function isAssistantMessageItem(item: ConversationItem | undefined): item is AssistantMessageItem {
+  return item?.kind === "message" && item.role === "assistant";
+}
+
+function isToolConversationItem(item: ConversationItem | undefined): item is ToolConversationItem {
+  return item?.kind === "tool";
 }
 
 function isOptimisticUserMessage(
@@ -106,6 +116,9 @@ function dropMatchingOptimisticUserMessage(
   const incomingImages = normalizeUserImages(incoming.images);
   for (let index = 0; index < list.length; index += 1) {
     const item = list[index];
+    if (!item) {
+      continue;
+    }
     if (!isOptimisticUserMessage(item)) {
       continue;
     }
@@ -237,6 +250,9 @@ function mergeThreadItemsPreservingOptimisticUsers(
     const trailingOptimisticUsers: UserMessageItem[] = [];
     for (let index = localItems.length - 1; index >= 0; index -= 1) {
       const item = localItems[index];
+      if (!item) {
+        continue;
+      }
       if (!isOptimisticUserMessage(item)) {
         break;
       }
@@ -287,7 +303,10 @@ function getAssistantTextForRename(
   }
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];
-    if (item.kind === "message" && item.role === "assistant") {
+    if (!item) {
+      continue;
+    }
+    if (isAssistantMessageItem(item)) {
       return item.text;
     }
   }
@@ -574,9 +593,11 @@ function findAssistantMessageIndexById(
   }
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const item = list[index];
+    if (!item) {
+      continue;
+    }
     if (
-      item.kind === "message" &&
-      item.role === "assistant" &&
+      isAssistantMessageItem(item) &&
       item.id === candidateId
     ) {
       return index;
@@ -595,9 +616,11 @@ function findAssistantMessageIndexByPrefix(
   const segmentPrefix = `${idPrefix}-seg-`;
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const item = list[index];
+    if (!item) {
+      continue;
+    }
     if (
-      item.kind === "message" &&
-      item.role === "assistant" &&
+      isAssistantMessageItem(item) &&
       item.id.startsWith(segmentPrefix)
     ) {
       return index;
@@ -637,6 +660,9 @@ function resolveLiveReasoningItemId(
 function dropLatestLocalReviewStart(list: ConversationItem[]) {
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const item = list[index];
+    if (!item) {
+      continue;
+    }
     if (
       item.kind === "review" &&
       item.state === "started" &&
@@ -739,11 +765,14 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           .filter(({ thread }) => thread.id.endsWith(`:${action.threadId}`))
           .map(({ index }) => index);
         if (aliasIndexes.length === 1) {
-          existingIndex = aliasIndexes[0];
+          existingIndex = aliasIndexes[0] ?? -1;
         }
       }
       if (existingIndex >= 0) {
         const existing = list[existingIndex];
+        if (!existing) {
+          return state;
+        }
         // BUG FIX: Only update engineSource if action.engine is explicitly provided
         // AND the existing engineSource is not already set.
         // This prevents inferred engines (from inferEngineFromThreadId) from
@@ -810,9 +839,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         // reconcile those cases safely.
         let pendingIndex: number | null = null;
         if (pendingIndexes.length === 1) {
-          const singlePendingId = list[pendingIndexes[0]]?.id ?? "";
+          const singlePendingIndex = pendingIndexes[0];
+          const singlePendingId =
+            singlePendingIndex !== undefined ? (list[singlePendingIndex]?.id ?? "") : "";
           if (singlePendingId && hasPendingThreadAnchor(singlePendingId)) {
-            pendingIndex = pendingIndexes[0];
+            pendingIndex = singlePendingIndex ?? null;
           }
         } else if (pendingIndexes.length === 0) {
           pendingIndex = resolveActivePendingIndex();
@@ -821,6 +852,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         if (pendingIndex !== null) {
           // Found a pending thread - perform inline rename to avoid race condition
           const pendingThread = list[pendingIndex];
+          if (!pendingThread) {
+            return state;
+          }
           const oldThreadId = pendingThread.id;
           const newThreadId = action.threadId;
 
@@ -1310,7 +1344,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       }
       if (index >= 0) {
         const existing = list[index];
-        if (existing.kind !== "message" || existing.role !== "assistant") {
+        if (!existing || !isAssistantMessageItem(existing)) {
           return state;
         }
         const nextId = shouldCanonicalizeLegacyId ? segmentedItemId : existing.id;
@@ -1384,7 +1418,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         index >= 0
           ? shouldCanonicalizeLegacyId
             ? segmentedItemId
-            : list[index].id
+            : (list[index]?.id ?? segmentedItemId)
           : segmentedItemId;
       const existingItem = index >= 0 ? list[index] : null;
       if (
@@ -1576,7 +1610,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     }
     case "setLastAgentMessage":
       if (
-        state.lastAgentMessageByThread[action.threadId]?.timestamp >= action.timestamp
+        state.lastAgentMessageByThread[action.threadId] &&
+        state.lastAgentMessageByThread[action.threadId]!.timestamp >= action.timestamp
       ) {
         return state;
       }
@@ -1989,10 +2024,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           },
         };
       }
-      if (list[index].kind !== "tool") {
+      const existing = list[index];
+      if (!isToolConversationItem(existing)) {
         return state;
       }
-      const existing = list[index];
       const nextOutput = mergeStreamingText(existing.output ?? "", action.delta);
       if (
         INCREMENTAL_DERIVATION_ENABLED &&

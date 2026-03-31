@@ -238,8 +238,9 @@ function joinReasoningFragments(parts: string[]) {
   if (fragments.length === 0) {
     return "";
   }
+  const firstFragment = fragments[0] ?? "";
   if (fragments.length === 1) {
-    return fragments[0];
+    return firstFragment;
   }
   return fragments.slice(1).reduce((combined, fragment) => {
     const previousChar = combined[combined.length - 1] ?? "";
@@ -248,7 +249,7 @@ function joinReasoningFragments(parts: string[]) {
       /[A-Za-z0-9]/.test(previousChar) &&
       /[A-Za-z0-9]/.test(nextChar);
     return shouldInsertSpace ? `${combined} ${fragment}` : `${combined}${fragment}`;
-  }, fragments[0]);
+  }, firstFragment);
 }
 
 function extractReasoningText(value: unknown): string {
@@ -328,6 +329,9 @@ function findDuplicateReasoningSnapshotIndex(
   }
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const candidate = list[index];
+    if (!candidate) {
+      continue;
+    }
     if (candidate.kind === "message" && candidate.role === "user") {
       break;
     }
@@ -920,7 +924,8 @@ function collapseRepeatedAssistantFullText(value: string) {
     }
     let nonSpaceCount = 0;
     for (let index = 0; index < trimmed.length; index += 1) {
-      if (!/\s/.test(trimmed[index])) {
+      const currentChar = trimmed[index];
+      if (currentChar && !/\s/.test(currentChar)) {
         nonSpaceCount += 1;
       }
       if (nonSpaceCount >= chunkLength) {
@@ -1526,7 +1531,13 @@ export function prepareThreadItems(items: ConversationItem[]) {
       coalesced.push(item);
       continue;
     }
-    coalesced[index] = mergeSameKindItem(coalesced[index], item);
+    const existing = coalesced[index];
+    if (!existing) {
+      coalescedIndexByKey.set(key, coalesced.length);
+      coalesced.push(item);
+      continue;
+    }
+    coalesced[index] = mergeSameKindItem(existing, item);
   }
   const filtered: ConversationItem[] = [];
   for (const item of coalesced) {
@@ -1579,7 +1590,11 @@ export function upsertItem(list: ConversationItem[], item: ConversationItem) {
     return [...list, item];
   }
   const next = [...list];
-  next[index] = mergeSameKindItem(next[index], item);
+  const existing = next[index];
+  if (!existing) {
+    return [...list, item];
+  }
+  next[index] = mergeSameKindItem(existing, item);
   return next;
 }
 
@@ -2029,6 +2044,9 @@ function extractLatestUserInputTextPreserveFormatting(text: string): string {
     return text;
   }
   const lastMatch = userInputMatches[userInputMatches.length - 1];
+  if (!lastMatch) {
+    return text;
+  }
   const markerIndex = lastMatch.index ?? -1;
   if (markerIndex < 0) {
     return text;

@@ -88,6 +88,9 @@ function findDuplicateReasoningIndex(
   }
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const candidate = items[index];
+    if (!candidate) {
+      continue;
+    }
     if (candidate.kind !== "reasoning") {
       continue;
     }
