@@ -1495,7 +1495,7 @@ go lang`,
         {
           type: "text",
           text:
-            "请继续优化。\n\n## Agent Role and Instructions\n\nAgent Name: 后端架构师\n\n你是一位资深后端架构师，擅长服务治理和高并发设计。",
+            "请继续优化。\n\n## Agent Role and Instructions\n\nAgent Name: 后端架构师\nAgent Icon: agent-robot-04\n\n你是一位资深后端架构师，擅长服务治理和高并发设计。",
         },
       ],
     });
@@ -1503,6 +1503,7 @@ go lang`,
     if (item && item.kind === "message") {
       expect(item.role).toBe("user");
       expect(item.selectedAgentName).toBe("后端架构师");
+      expect(item.selectedAgentIcon).toBe("agent-robot-04");
     }
   });
 

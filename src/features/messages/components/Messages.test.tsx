@@ -247,7 +247,7 @@ describe("Messages", () => {
         kind: "message",
         role: "user",
         text:
-          "请继续。\n\n## Agent Role and Instructions\n\nAgent Name: 后端架构师\n\n你是一位资深后端架构师，擅长服务治理和高并发设计。",
+          "请继续。\n\n## Agent Role and Instructions\n\nAgent Name: 后端架构师\nAgent Icon: agent-robot-04\n\n你是一位资深后端架构师，擅长服务治理和高并发设计。",
       },
     ];
 
@@ -270,6 +270,7 @@ describe("Messages", () => {
       fireEvent.click(agentIconButton);
     }
     expect(container.querySelector(".message-agent-tag-text")?.textContent ?? "").toBe("后端架构师");
+    expect(agentIconButton?.querySelector(".agent-icon-svg")?.innerHTML ?? "").toContain("<svg");
   });
 
   it("shows selected agent tag for realtime/local user message metadata", () => {

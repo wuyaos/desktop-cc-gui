@@ -234,6 +234,8 @@ const AGENT_PROMPT_BLOCK_AT_TAIL_REGEX =
   /(?:\r?\n){2}##\s*Agent Role and Instructions\s*(?:\r?\n){2}([\s\S]*)$/;
 const AGENT_PROMPT_NAME_LINE_REGEX =
   /^(?:agent\s*name|selected\s*agent|智能体(?:名称|标题)?|agent)\s*[:：]\s*(.+)$/i;
+const AGENT_PROMPT_ICON_LINE_REGEX =
+  /^(?:agent\s*icon|selected\s*agent\s*icon|智能体图标|agent\s*icon\s*id)\s*[:：]\s*(.+)$/i;
 const MESSAGES_PERF_DEBUG_FLAG_KEY = "mossx.debug.messages.perf";
 const CLAUDE_HIDE_REASONING_MODULE_FLAG_KEY = "mossx.claude.hideReasoningModule";
 const CLAUDE_RENDER_DEBUG_FLAG_KEY = "mossx.debug.claude.render";
@@ -402,36 +404,69 @@ function extractAgentNameFromPromptLine(value: string | null): string | null {
   return isLikelyAgentDisplayName(normalized) ? normalized : null;
 }
 
+function extractAgentIconFromPromptLine(value: string | null): string | null {
+  const normalized = normalizeSelectedAgentName(value);
+  if (!normalized) {
+    return null;
+  }
+  const iconMatch = AGENT_PROMPT_ICON_LINE_REGEX.exec(normalized);
+  if (!iconMatch?.[1]) {
+    return null;
+  }
+  return normalizeSelectedAgentIcon(iconMatch[1]);
+}
+
 function stripAgentPromptBlockFromUserText(
   text: string,
   fallbackAgentName: string | null,
+  fallbackAgentIcon: string | null,
 ): {
   text: string;
   selectedAgentName: string | null;
+  selectedAgentIcon: string | null;
   hasInjectedAgentPromptBlock: boolean;
 } {
   const match = AGENT_PROMPT_BLOCK_AT_TAIL_REGEX.exec(text);
   if (!match || typeof match.index !== "number" || match.index < 0) {
-    return { text, selectedAgentName: null, hasInjectedAgentPromptBlock: false };
+    return {
+      text,
+      selectedAgentName: null,
+      selectedAgentIcon: null,
+      hasInjectedAgentPromptBlock: false,
+    };
   }
   const tailText = match[1] ?? "";
   if (!tailText.trim()) {
-    return { text, selectedAgentName: null, hasInjectedAgentPromptBlock: false };
+    return {
+      text,
+      selectedAgentName: null,
+      selectedAgentIcon: null,
+      hasInjectedAgentPromptBlock: false,
+    };
   }
-  const inferredAgentName = extractAgentNameFromPromptLine(
-    tailText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? null,
-  );
+  const promptLines = tailText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const inferredAgentName = extractAgentNameFromPromptLine(promptLines[0] ?? null);
+  const inferredAgentIcon = promptLines
+    .map((line) => extractAgentIconFromPromptLine(line))
+    .find((icon) => Boolean(icon)) ?? null;
   const agentName = fallbackAgentName ?? inferredAgentName;
+  const agentIcon = fallbackAgentIcon ?? inferredAgentIcon;
   const baseText = text.slice(0, match.index).replace(/\s+$/, "");
   if (!baseText) {
-    return { text, selectedAgentName: null, hasInjectedAgentPromptBlock: false };
+    return {
+      text,
+      selectedAgentName: null,
+      selectedAgentIcon: null,
+      hasInjectedAgentPromptBlock: false,
+    };
   }
   return {
     text: baseText,
     selectedAgentName: agentName,
+    selectedAgentIcon: agentIcon,
     hasInjectedAgentPromptBlock: true,
   };
 }
@@ -1524,9 +1559,11 @@ const MessageRow = memo(function MessageRow({
       };
     }
     const normalizedSelectedAgentName = normalizeSelectedAgentName(item.selectedAgentName);
+    const normalizedSelectedAgentIcon = normalizeSelectedAgentIcon(item.selectedAgentIcon);
     const strippedAgentPrompt = stripAgentPromptBlockFromUserText(
       originalText,
       normalizedSelectedAgentName,
+      normalizedSelectedAgentIcon,
     );
     const safeText = enableCollaborationBadge
       ? extractModeFallbackUserInput(strippedAgentPrompt.text).text
@@ -1537,7 +1574,9 @@ const MessageRow = memo(function MessageRow({
       selectedAgentName:
         strippedAgentPrompt.selectedAgentName
         ?? normalizedSelectedAgentName,
-      selectedAgentIcon: normalizeSelectedAgentIcon(item.selectedAgentIcon),
+      selectedAgentIcon:
+        strippedAgentPrompt.selectedAgentIcon
+        ?? normalizedSelectedAgentIcon,
       hasInjectedAgentPromptBlock: strippedAgentPrompt.hasInjectedAgentPromptBlock,
     };
   }, [

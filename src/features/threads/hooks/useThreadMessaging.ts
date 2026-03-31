@@ -81,6 +81,7 @@ const SPEC_ROOT_PRIORITY_MARKER = "[Spec Root Priority]";
 const SPEC_ROOT_SESSION_MARKER = "[Session Spec Link]";
 const AGENT_PROMPT_HEADER = "## Agent Role and Instructions";
 const AGENT_PROMPT_NAME_PREFIX = "Agent Name:";
+const AGENT_PROMPT_ICON_PREFIX = "Agent Icon:";
 
 type SessionSpecLinkSource = "custom" | "default";
 type SessionSpecProbeStatus = "visible" | "invalid" | "permissionDenied" | "malformed";
@@ -712,6 +713,9 @@ export function useThreadMessaging({
       const selectedAgentPromptSections: string[] = [];
       if (selectedAgentName) {
         selectedAgentPromptSections.push(`${AGENT_PROMPT_NAME_PREFIX} ${selectedAgentName}`);
+      }
+      if (selectedAgentIcon) {
+        selectedAgentPromptSections.push(`${AGENT_PROMPT_ICON_PREFIX} ${selectedAgentIcon}`);
       }
       if (selectedAgentPrompt) {
         selectedAgentPromptSections.push(selectedAgentPrompt);

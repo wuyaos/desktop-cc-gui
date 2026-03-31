@@ -1,4 +1,5 @@
 import type { ConversationItem } from "../types";
+import { normalizeAgentIcon } from "./agentIcons";
 import { summarizeExploration } from "./threadItemsExploreSummary";
 import {
   inferFileChangesFromCommandExecutionArtifacts,
@@ -17,6 +18,8 @@ const AGENT_PROMPT_BLOCK_AT_TAIL_REGEX =
   /(?:\r?\n){2}##\s*Agent Role and Instructions\s*(?:\r?\n){2}([\s\S]*)$/;
 const AGENT_PROMPT_NAME_LINE_REGEX =
   /^(?:agent\s*name|selected\s*agent|智能体(?:名称|标题)?|agent)\s*[:：]\s*(.+)$/i;
+const AGENT_PROMPT_ICON_LINE_REGEX =
+  /^(?:agent\s*icon|selected\s*agent\s*icon|智能体图标|agent\s*icon\s*id)\s*[:：]\s*(.+)$/i;
 const TITLE_INJECTED_LINE_PREFIX_REGEX =
   /^\[(?:System|Session Spec Link|Spec Root Priority|Skill Prompt|Commons Prompt)\][^\n]*(?:\r?\n|$)/i;
 const EDIT_TOOL_TYPE_HINTS = new Set([
@@ -1660,7 +1663,7 @@ export function buildConversationItem(
       fallbackCollaborationMode,
     );
     const selectedAgentName = extractSelectedAgentNameFromUserMessageItem(item, text);
-    const selectedAgentIcon = extractSelectedAgentIconFromUserMessageItem(item);
+    const selectedAgentIcon = extractSelectedAgentIconFromUserMessageItem(item, text);
     return {
       id,
       kind: "message",
@@ -2108,6 +2111,32 @@ function extractSelectedAgentNameFromPromptText(text: string): string | null {
   return extractAgentNameFromPromptLine(firstLine);
 }
 
+function extractSelectedAgentIconFromPromptText(text: string): string | null {
+  const match = AGENT_PROMPT_BLOCK_AT_TAIL_REGEX.exec(text);
+  if (!match) {
+    return null;
+  }
+  const tailText = match[1] ?? "";
+  if (!tailText.trim()) {
+    return null;
+  }
+  for (const line of tailText.split(/\r?\n/)) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) {
+      continue;
+    }
+    const iconMatch = AGENT_PROMPT_ICON_LINE_REGEX.exec(trimmedLine);
+    if (!iconMatch?.[1]) {
+      continue;
+    }
+    const normalized = normalizeAgentIcon(iconMatch[1]);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
 function extractRawUserMessageTextCandidates(item: Record<string, unknown>): string[] {
   const candidates: string[] = [];
   const directText = asString(item.text);
@@ -2163,6 +2192,7 @@ function extractSelectedAgentNameFromUserMessageItem(
 
 function extractSelectedAgentIconFromUserMessageItem(
   item: Record<string, unknown>,
+  text: string,
 ): string | null {
   const metadata = asRecord(item.metadata);
   const explicitIconCandidates: unknown[] = [
@@ -2178,9 +2208,16 @@ function extractSelectedAgentIconFromUserMessageItem(
     metadata?.agent_icon,
   ];
   for (const candidate of explicitIconCandidates) {
-    const normalized = asString(candidate).trim();
+    const normalized = normalizeAgentIcon(candidate);
     if (normalized) {
       return normalized;
+    }
+  }
+  const promptTextCandidates = [text, ...extractRawUserMessageTextCandidates(item)];
+  for (const candidate of promptTextCandidates) {
+    const extracted = extractSelectedAgentIconFromPromptText(candidate);
+    if (extracted) {
+      return extracted;
     }
   }
   return null;
@@ -2296,7 +2333,7 @@ export function buildConversationItemFromThreadItem(
       fallbackCollaborationMode,
     );
     const selectedAgentName = extractSelectedAgentNameFromUserMessageItem(item, text);
-    const selectedAgentIcon = extractSelectedAgentIconFromUserMessageItem(item);
+    const selectedAgentIcon = extractSelectedAgentIconFromUserMessageItem(item, text);
     return {
       id,
       kind: "message",
