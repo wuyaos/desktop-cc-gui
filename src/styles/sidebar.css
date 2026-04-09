@@ -4,7 +4,7 @@
   --sidebar-space-2: 8px;
   --sidebar-space-3: 12px;
   --sidebar-row-radius: 8px;
-  --sidebar-row-height-workspace: 32px;
+  --sidebar-row-height-workspace: 28px;
   --sidebar-row-height-thread: 30px;
   --sidebar-color-active-primary: var(--surface-hover);
   --sidebar-color-active-secondary: color-mix(
@@ -881,6 +881,10 @@
   position: relative;
 }
 
+.workspace-card + .workspace-card {
+  margin-top: -1px;
+}
+
 .workspace-children {
   position: relative;
   display: flex;
@@ -942,7 +946,7 @@
   align-items: center;
   min-height: var(--sidebar-row-height-workspace);
   width: 100%;
-  padding: 4px 8px;
+  padding: 2px 8px;
   gap: 6px;
   color: var(--text-muted);
   border-radius: var(--sidebar-row-radius);
