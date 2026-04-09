@@ -1,6 +1,6 @@
 import type React from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeftRight, Monitor, Moon, Palette, RotateCcw, Sun, Type, MessageCircle, Info } from "lucide-react";
+import { ArrowLeftRight, Monitor, Moon, Palette, RotateCcw, Sun, Type, MessageCircle, Info, PanelsLeftRight } from "lucide-react";
 import type { AppSettings } from "../../../../../types";
 import { clampUiScale } from "../../../../../utils/uiScale";
 import {
@@ -196,6 +196,47 @@ export function BasicAppearanceSection({
             </button>
           </div>
           <div className="settings-help">{t("settings.canvasWidthDesc")}</div>
+        </div>
+        <div className="settings-field settings-basic-item">
+          <div className="settings-basic-field-header">
+            <PanelsLeftRight className="settings-basic-field-icon" aria-hidden />
+            <span className="settings-basic-field-label">{t("settings.layoutMode")}</span>
+          </div>
+          <div className="settings-basic-theme-selector" role="radiogroup" aria-label={t("settings.layoutMode")}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={appSettings.layoutMode !== "swapped"}
+              className={`settings-basic-theme-option ${
+                appSettings.layoutMode !== "swapped" ? "active" : ""
+              }`}
+              onClick={() =>
+                void onUpdateAppSettings({
+                  ...appSettings,
+                  layoutMode: "default",
+                })
+              }
+            >
+              <span>{t("settings.layoutModeDefault")}</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={appSettings.layoutMode === "swapped"}
+              className={`settings-basic-theme-option ${
+                appSettings.layoutMode === "swapped" ? "active" : ""
+              }`}
+              onClick={() =>
+                void onUpdateAppSettings({
+                  ...appSettings,
+                  layoutMode: "swapped",
+                })
+              }
+            >
+              <span>{t("settings.layoutModeSwapped")}</span>
+            </button>
+          </div>
+          <div className="settings-help">{t("settings.layoutModeDesc")}</div>
         </div>
         <div className="settings-field settings-basic-item settings-scale-item">
           <div className="settings-basic-field-header">

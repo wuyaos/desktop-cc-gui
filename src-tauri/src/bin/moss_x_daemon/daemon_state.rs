@@ -36,7 +36,10 @@ impl DaemonState {
             .and_then(|parent_id| workspaces.get(parent_id));
 
         let mut roots = vec![
-            self.data_dir.join("workspaces").join(&entry.id).join("skills"),
+            self.data_dir
+                .join("workspaces")
+                .join(&entry.id)
+                .join("skills"),
             PathBuf::from(&entry.path).join(".claude").join("skills"),
             PathBuf::from(&entry.path).join(".codex").join("skills"),
             PathBuf::from(&entry.path).join(".gemini").join("skills"),

@@ -107,6 +107,7 @@ const baseSettings: AppSettings = {
   uiScale: 1,
   theme: "system",
   canvasWidthMode: "narrow",
+  layoutMode: "default",
   userMsgColor: "",
   usageShowRemaining: false,
   showMessageAnchors: true,
@@ -479,7 +480,7 @@ describe("SettingsView Display", () => {
     renderDisplaySection({ onUpdateAppSettings });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("radio", { name: "settings.canvasWidthWide" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Wide canvas" }));
     });
 
     await waitFor(() => {
@@ -497,12 +498,45 @@ describe("SettingsView Display", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("radio", { name: "settings.canvasWidthNarrow" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Narrow canvas" }));
     });
 
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ canvasWidthMode: "narrow" }),
+      );
+    });
+  });
+
+  it("updates the layout mode selection", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({ onUpdateAppSettings });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("radio", { name: "Left on right" }));
+    });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ layoutMode: "swapped" }),
+      );
+    });
+  });
+
+  it("switches layout mode from swapped back to default", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: { layoutMode: "swapped" },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("radio", { name: "Default layout" }));
+    });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ layoutMode: "default" }),
       );
     });
   });

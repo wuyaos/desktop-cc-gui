@@ -138,6 +138,7 @@ export type AppMode = "chat" | "kanban" | "gitHistory";
 export type ComposerEditorPreset = "default" | "helpful" | "smart";
 export type ComposerSendShortcut = "enter" | "cmdEnter";
 export type CanvasWidthMode = "narrow" | "wide";
+export type LayoutMode = "default" | "swapped";
 
 export type ComposerEditorSettings = {
   preset: ComposerEditorPreset;
@@ -192,6 +193,7 @@ export type AppSettings = {
   uiScale: number;
   theme: ThemePreference;
   canvasWidthMode: CanvasWidthMode;
+  layoutMode?: LayoutMode;
   userMsgColor: string;
   usageShowRemaining: boolean;
   showMessageAnchors: boolean;

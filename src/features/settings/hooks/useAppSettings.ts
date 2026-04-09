@@ -24,6 +24,7 @@ import { normalizeHexColor } from "../../../utils/colorUtils";
 
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
 const allowedCanvasWidthModes = new Set(["narrow", "wide"]);
+const allowedLayoutModes = new Set(["default", "swapped"]);
 const allowedComposerSendShortcuts = new Set(["enter", "cmdEnter"]);
 const SEARCH_SHORTCUT_DISALLOWED = new Set(["cmd+p", "ctrl+p"]);
 const ALLOWED_NOTIFICATION_SOUND_IDS = new Set([
@@ -120,6 +121,7 @@ const defaultSettings: AppSettings = {
   uiScale: UI_SCALE_DEFAULT,
   theme: "system",
   canvasWidthMode: "narrow",
+  layoutMode: "default",
   userMsgColor: "",
   usageShowRemaining: false,
   showMessageAnchors: true,
@@ -204,6 +206,9 @@ function normalizeAppSettings(
     canvasWidthMode: allowedCanvasWidthModes.has(settings.canvasWidthMode)
       ? settings.canvasWidthMode
       : "narrow",
+    layoutMode: allowedLayoutModes.has(settings.layoutMode ?? "default")
+      ? settings.layoutMode ?? "default"
+      : "default",
     userMsgColor: fallbackUserMsgColor,
     uiFontFamily: normalizeFontFamily(
       settings.uiFontFamily,

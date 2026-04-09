@@ -707,6 +707,8 @@ pub(crate) struct AppSettings {
     pub(crate) show_message_anchors: bool,
     #[serde(default = "default_canvas_width_mode", rename = "canvasWidthMode")]
     pub(crate) canvas_width_mode: String,
+    #[serde(default = "default_layout_mode", rename = "layoutMode")]
+    pub(crate) layout_mode: String,
     #[serde(default = "default_ui_font_family", rename = "uiFontFamily")]
     pub(crate) ui_font_family: String,
     #[serde(default = "default_code_font_family", rename = "codeFontFamily")]
@@ -901,6 +903,10 @@ fn default_show_message_anchors() -> bool {
 
 fn default_canvas_width_mode() -> String {
     "narrow".to_string()
+}
+
+fn default_layout_mode() -> String {
+    "default".to_string()
 }
 
 fn default_ui_font_family() -> String {
@@ -1206,6 +1212,7 @@ impl Default for AppSettings {
             usage_show_remaining: default_usage_show_remaining(),
             show_message_anchors: default_show_message_anchors(),
             canvas_width_mode: default_canvas_width_mode(),
+            layout_mode: default_layout_mode(),
             ui_font_family: default_ui_font_family(),
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),
@@ -1384,6 +1391,7 @@ mod tests {
         assert!(!settings.usage_show_remaining);
         assert!(settings.show_message_anchors);
         assert_eq!(settings.canvas_width_mode, "narrow");
+        assert_eq!(settings.layout_mode, "default");
         assert!(settings.ui_font_family.starts_with("Monaco"));
         assert!(settings.code_font_family.starts_with("Monaco"));
         assert_eq!(settings.code_font_size, 11);

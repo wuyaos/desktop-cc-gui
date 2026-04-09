@@ -1364,8 +1364,8 @@ mod tests {
         workspace_requires_persistent_session,
     };
     use crate::types::{WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
-    use std::collections::HashMap;
     use git2::{Repository, Signature};
+    use std::collections::HashMap;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use tokio::sync::Mutex;

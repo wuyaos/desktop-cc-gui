@@ -138,6 +138,22 @@ body {
   transition: grid-template-columns 220ms ease;
   font-family: var(--ui-font-family);
 }
+
+.app.layout-desktop.layout-swapped {
+  grid-template-columns: 1fr var(--sidebar-width, 210px);
+}
+
+.app.layout-desktop.layout-swapped .main {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.app.layout-desktop.layout-swapped .sidebar {
+  grid-column: 2;
+  grid-row: 1;
+  border-right: none;
+  border-left: 1px solid var(--border-subtle);
+}
 .app.is-resizing,
 .app.is-resizing .main {
   transition: none;
@@ -234,6 +250,11 @@ body[data-panel-resizing="true"] .app {
   cursor: col-resize;
   z-index: 3;
   transition: opacity 160ms ease;
+}
+
+.app.layout-desktop.layout-swapped .sidebar-resizer {
+  left: auto;
+  right: calc(var(--sidebar-width, 210px) - 4px);
 }
 
 .sidebar-resizer::after {

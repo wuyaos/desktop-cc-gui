@@ -1647,8 +1647,7 @@ mod tests {
     #[test]
     fn list_external_absolute_directory_children_rejects_relative_path() {
         let root = PathBuf::from("/tmp");
-        let result =
-            list_external_absolute_directory_children_inner("relative/path", &[root], 20);
+        let result = list_external_absolute_directory_children_inner("relative/path", &[root], 20);
         assert!(result.is_err());
         assert_eq!(result.err().as_deref(), Some("Invalid directory path."));
     }

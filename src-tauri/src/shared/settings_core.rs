@@ -13,6 +13,8 @@ const UI_SCALE_MAX: f64 = 2.6;
 const UI_SCALE_DEFAULT: f64 = 1.0;
 const CANVAS_WIDTH_MODE_NARROW: &str = "narrow";
 const CANVAS_WIDTH_MODE_WIDE: &str = "wide";
+const LAYOUT_MODE_DEFAULT: &str = "default";
+const LAYOUT_MODE_SWAPPED: &str = "swapped";
 
 fn sanitize_ui_scale(scale: f64) -> f64 {
     if !scale.is_finite() || scale < UI_SCALE_MIN || scale > UI_SCALE_MAX {
@@ -25,6 +27,13 @@ fn sanitize_canvas_width_mode(mode: &str) -> String {
     match mode {
         CANVAS_WIDTH_MODE_NARROW | CANVAS_WIDTH_MODE_WIDE => mode.to_string(),
         _ => CANVAS_WIDTH_MODE_NARROW.to_string(),
+    }
+}
+
+fn sanitize_layout_mode(mode: &str) -> String {
+    match mode {
+        LAYOUT_MODE_DEFAULT | LAYOUT_MODE_SWAPPED => mode.to_string(),
+        _ => LAYOUT_MODE_DEFAULT.to_string(),
     }
 }
 
@@ -72,6 +81,7 @@ pub(crate) async fn get_app_settings_core(app_settings: &Mutex<AppSettings>) -> 
     }
     settings.ui_scale = sanitize_ui_scale(settings.ui_scale);
     settings.canvas_width_mode = sanitize_canvas_width_mode(&settings.canvas_width_mode);
+    settings.layout_mode = sanitize_layout_mode(&settings.layout_mode);
     settings
 }
 
@@ -82,6 +92,7 @@ pub(crate) async fn update_app_settings_core(
 ) -> Result<AppSettings, String> {
     let mut normalized = settings;
     normalized.canvas_width_mode = sanitize_canvas_width_mode(&normalized.canvas_width_mode);
+    normalized.layout_mode = sanitize_layout_mode(&normalized.layout_mode);
     validate_ui_scale(normalized.ui_scale)?;
     proxy_core::validate_proxy_settings(&normalized)?;
     sync_codex_config_flags(&normalized);
@@ -141,7 +152,10 @@ pub(crate) fn get_codex_config_path_core() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_canvas_width_mode, sanitize_ui_scale, validate_ui_scale, UI_SCALE_DEFAULT};
+    use super::{
+        sanitize_canvas_width_mode, sanitize_layout_mode, sanitize_ui_scale, validate_ui_scale,
+        UI_SCALE_DEFAULT,
+    };
 
     #[test]
     fn sanitize_ui_scale_falls_back_for_out_of_range() {
@@ -166,6 +180,18 @@ mod tests {
     fn sanitize_canvas_width_mode_keeps_supported_values() {
         assert_eq!(sanitize_canvas_width_mode("narrow"), "narrow");
         assert_eq!(sanitize_canvas_width_mode("wide"), "wide");
+    }
+
+    #[test]
+    fn sanitize_layout_mode_falls_back_for_invalid_values() {
+        assert_eq!(sanitize_layout_mode("foo"), "default");
+        assert_eq!(sanitize_layout_mode(""), "default");
+    }
+
+    #[test]
+    fn sanitize_layout_mode_keeps_supported_values() {
+        assert_eq!(sanitize_layout_mode("default"), "default");
+        assert_eq!(sanitize_layout_mode("swapped"), "swapped");
     }
 
     #[test]

@@ -1,9 +1,8 @@
 use super::EngineEvent;
 use super::{
-    collect_latest_turn_reasoning_texts, extract_latest_thought_text,
-    extract_session_id, extract_tool_events_from_snapshot, parse_gemini_event,
-    should_extract_thought_fallback, GeminiSession, GeminiSessionMessage, SendMessageParams,
-    GeminiSnapshotToolState,
+    collect_latest_turn_reasoning_texts, extract_latest_thought_text, extract_session_id,
+    extract_tool_events_from_snapshot, parse_gemini_event, should_extract_thought_fallback,
+    GeminiSession, GeminiSessionMessage, GeminiSnapshotToolState, SendMessageParams,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::json;
@@ -316,7 +315,10 @@ fn build_command_routes_long_prompt_to_stdin() {
     let prompt_value = args
         .get(prompt_idx + 1)
         .expect("missing prompt value after --prompt");
-    assert_eq!(prompt_value, "", "long prompt should use empty argv placeholder");
+    assert_eq!(
+        prompt_value, "",
+        "long prompt should use empty argv placeholder"
+    );
 
     let _ = std::fs::remove_dir_all(&workspace_path);
 }

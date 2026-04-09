@@ -140,7 +140,10 @@ pub(crate) async fn cleanup_terminal_sessions_for_workspace(state: &AppState, wo
 pub(crate) async fn cleanup_all_terminal_sessions(state: &AppState) {
     let removed_sessions = {
         let mut sessions = state.terminal_sessions.lock().await;
-        sessions.drain().map(|(_, session)| session).collect::<Vec<_>>()
+        sessions
+            .drain()
+            .map(|(_, session)| session)
+            .collect::<Vec<_>>()
     };
 
     for session in removed_sessions {

@@ -1809,6 +1809,7 @@ export function useAppShellSections(ctx: any) {
     isCompact,
     sidebarCollapsed,
     rightPanelCollapsed,
+    isLayoutSwapped: !isCompact && appSettings.layoutMode === "swapped",
     rightPanelAvailable,
     onCollapseSidebar: collapseSidebar,
     onExpandSidebar: expandSidebar,
@@ -2033,6 +2034,8 @@ export function useAppShellSections(ctx: any) {
     reduceTransparency ? " reduced-transparency" : ""
   }${
     appSettings.canvasWidthMode === "wide" ? " canvas-width-wide" : ""
+  }${
+    !isCompact && appSettings.layoutMode === "swapped" ? " layout-swapped" : ""
   }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
   }${shouldShowSidebarTopbarContent ? " sidebar-title-relocated" : ""}${

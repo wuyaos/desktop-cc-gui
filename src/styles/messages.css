@@ -390,6 +390,14 @@
   right: calc(var(--main-panel-padding, 24px) + 6px);
 }
 
+.app.layout-desktop.layout-swapped .messages-live-controls {
+  right: calc(var(--sidebar-width, 210px) + var(--main-panel-padding, 24px) + 6px);
+}
+
+.app.layout-desktop.layout-swapped.right-panel-collapsed .messages-live-controls {
+  right: calc(var(--sidebar-width, 210px) + var(--main-panel-padding, 24px) + 6px);
+}
+
 .messages-empty {
   padding: 24px 0;
   max-width: 750px;

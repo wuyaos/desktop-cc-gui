@@ -804,8 +804,7 @@ impl ClaudeSession {
         {
             if let Some(pid) = child.id() {
                 let process_group_id = pid as libc::pid_t;
-                let terminate_status =
-                    unsafe { libc::kill(-process_group_id, libc::SIGTERM) };
+                let terminate_status = unsafe { libc::kill(-process_group_id, libc::SIGTERM) };
                 if terminate_status != 0 {
                     let error = std::io::Error::last_os_error();
                     if error.raw_os_error() != Some(libc::ESRCH) {

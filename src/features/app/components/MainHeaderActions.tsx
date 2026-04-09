@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import Construction from "lucide-react/dist/esm/icons/construction";
 import Focus from "lucide-react/dist/esm/icons/focus";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
+import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close";
+import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open";
 import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
@@ -44,7 +46,12 @@ export const MainHeaderActions = memo(function MainHeaderActions({
   onOpenSpecHub,
 }: MainHeaderActionsProps) {
   const { t } = useTranslation();
-  const { rightPanelAvailable = true, onCollapseRightPanel, onExpandRightPanel } =
+  const {
+    rightPanelAvailable = true,
+    isLayoutSwapped = false,
+    onCollapseRightPanel,
+    onExpandRightPanel,
+  } =
     sidebarToggleProps;
 
   const canToggleRuntimeConsole =
@@ -126,9 +133,9 @@ export const MainHeaderActions = memo(function MainHeaderActions({
           title={t(labelKey)}
         >
           {isCollapsed ? (
-            <PanelRightOpen size={14} aria-hidden />
+            isLayoutSwapped ? <PanelLeftOpen size={14} aria-hidden /> : <PanelRightOpen size={14} aria-hidden />
           ) : (
-            <PanelRightClose size={14} aria-hidden />
+            isLayoutSwapped ? <PanelLeftClose size={14} aria-hidden /> : <PanelRightClose size={14} aria-hidden />
           )}
         </button>
       )}

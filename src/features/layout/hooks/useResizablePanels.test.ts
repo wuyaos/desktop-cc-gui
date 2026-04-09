@@ -198,4 +198,75 @@ describe("useResizablePanels", () => {
 
     hook.unmount();
   });
+
+  it("uses mirrored drag direction for sidebar in swapped layout", () => {
+    const app = document.createElement("div");
+    app.className = "app layout-swapped";
+    document.body.appendChild(app);
+    writeClientStoreValue("layout", "sidebarWidth", 250);
+
+    const hook = renderResizablePanels();
+
+    act(() => {
+      hook.result.onSidebarResizeStart({
+        clientX: 500,
+        clientY: 0,
+        button: 0,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as React.MouseEvent);
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 400, clientY: 0 }),
+      );
+      vi.runAllTimers();
+    });
+
+    expect(hook.result.sidebarWidth).toBe(350);
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent("mouseup"));
+    });
+
+    app.remove();
+    hook.unmount();
+  });
+
+  it("uses mirrored drag direction for right panel in swapped layout", () => {
+    const app = document.createElement("div");
+    app.className = "app layout-swapped";
+    document.body.appendChild(app);
+    writeClientStoreValue("layout", "rightPanelWidth", 300);
+
+    const hook = renderResizablePanels();
+
+    act(() => {
+      hook.result.onRightPanelResizeStart({
+        clientX: 500,
+        clientY: 0,
+        button: 0,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as React.MouseEvent);
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 600, clientY: 0 }),
+      );
+      vi.runAllTimers();
+    });
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent("mouseup"));
+      vi.runAllTimers();
+    });
+
+    expect(hook.result.rightPanelWidth).toBe(400);
+
+    app.remove();
+    hook.unmount();
+  });
 });

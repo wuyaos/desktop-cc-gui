@@ -5,11 +5,13 @@ import { isWindowsPlatform } from "../../../utils/platform";
 import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close";
 import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open";
 import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close";
+import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 
 export type SidebarToggleProps = {
   isCompact: boolean;
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
+  isLayoutSwapped?: boolean;
   rightPanelAvailable?: boolean;
   onCollapseSidebar: () => void;
   onExpandSidebar: () => void;
@@ -20,6 +22,7 @@ export type SidebarToggleProps = {
 export function SidebarCollapseButton({
   isCompact,
   sidebarCollapsed,
+  isLayoutSwapped = false,
   onExpandSidebar,
   onCollapseSidebar,
 }: SidebarToggleProps) {
@@ -38,7 +41,11 @@ export function SidebarCollapseButton({
       aria-label={t(labelKey)}
       title={t(labelKey)}
     >
-      {isCollapsed ? <PanelLeftOpen size={14} aria-hidden /> : <PanelLeftClose size={14} aria-hidden />}
+      {isCollapsed ? (
+        isLayoutSwapped ? <PanelRightOpen size={14} aria-hidden /> : <PanelLeftOpen size={14} aria-hidden />
+      ) : (
+        isLayoutSwapped ? <PanelRightClose size={14} aria-hidden /> : <PanelLeftClose size={14} aria-hidden />
+      )}
     </button>
   );
 }
