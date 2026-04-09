@@ -1,4 +1,6 @@
 import { useTranslation } from "react-i18next";
+import Languages from "lucide-react/dist/esm/icons/languages";
+import LetterText from "lucide-react/dist/esm/icons/letter-text";
 import { saveLanguage } from "../../../i18n";
 
 type LanguageSelectorProps = {
@@ -7,27 +9,57 @@ type LanguageSelectorProps = {
 
 export function LanguageSelector({ rowClassName }: LanguageSelectorProps = {}) {
   const { t, i18n } = useTranslation();
-  const currentLanguage = i18n.language;
+  const normalizedLanguage = (i18n.language || "").toLowerCase();
+  const currentLanguage = normalizedLanguage.startsWith("en") ? "en" : "zh";
 
-  const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const newLang = event.target.value;
-    i18n.changeLanguage(newLang);
+  const handleLanguageChange = (newLang: "zh" | "en") => {
+    if (newLang === currentLanguage) {
+      return;
+    }
+    void i18n.changeLanguage(newLang);
     saveLanguage(newLang);
   };
 
   return (
     <div className={`settings-row mb-3 ${rowClassName ?? ""}`.trim()}>
-      <div className="settings-label">{t("settings.language")}</div>
+      <div className="settings-label settings-basic-field-header">
+        <Languages className="settings-basic-field-icon" aria-hidden />
+        <span className="settings-basic-field-label">{t("settings.language")}</span>
+      </div>
       <div className="settings-control">
-        <div className="settings-select-wrap">
-          <select
-            className="settings-select"
-            value={currentLanguage}
-            onChange={handleLanguageChange}
+        <div
+          className="settings-basic-language-selector"
+          role="radiogroup"
+          aria-label={t("settings.language")}
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={currentLanguage === "zh"}
+            className={`settings-basic-language-option ${
+              currentLanguage === "zh" ? "active" : ""
+            }`}
+            onClick={() => handleLanguageChange("zh")}
           >
-            <option value="zh">{t("settings.languageZh")}</option>
-            <option value="en">{t("settings.languageEn")}</option>
-          </select>
+            <span className="settings-basic-language-icon settings-basic-language-icon-zh">
+              <Languages size={14} />
+            </span>
+            <span>{t("settings.languageZh")}</span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={currentLanguage === "en"}
+            className={`settings-basic-language-option ${
+              currentLanguage === "en" ? "active" : ""
+            }`}
+            onClick={() => handleLanguageChange("en")}
+          >
+            <span className="settings-basic-language-icon settings-basic-language-icon-en">
+              <LetterText size={14} />
+            </span>
+            <span>{t("settings.languageEn")}</span>
+          </button>
         </div>
       </div>
     </div>

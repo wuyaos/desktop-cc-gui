@@ -525,7 +525,7 @@ describe("SettingsView Display", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const fontSizeSlider = screen.getByLabelText("Font size");
+    const fontSizeSlider = screen.getByLabelText("Interface scale");
 
     fireEvent.change(fontSizeSlider, { target: { value: "1.36" } });
     fireEvent.click(screen.getByTestId("settings-ui-scale-save"));
@@ -560,7 +560,7 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("commits ui font selection and code font input changes", async () => {
+  it("commits ui font selection and code font dropdown changes", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     queryLocalFontsMock.mockResolvedValue([...mockedLocalFonts]);
     renderDisplaySection({ onUpdateAppSettings });
@@ -577,27 +577,27 @@ describe("SettingsView Display", () => {
       );
     });
 
-    const codeFontInput = screen.getByLabelText("Code font family");
-    fireEvent.change(codeFontInput, {
-      target: { value: "JetBrains Mono, monospace" },
-    });
-    fireEvent.keyDown(codeFontInput, { key: "Enter" });
+    const codeFontSelect = screen.getByTestId("settings-code-font-select");
+    fireEvent.change(codeFontSelect, { target: { value: "Avenir" } });
 
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ codeFontFamily: "JetBrains Mono, monospace" }),
+        expect.objectContaining({ codeFontFamily: "Avenir" }),
       );
     });
   });
 
-  it("lists local ui fonts in the dropdown", async () => {
+  it("lists local fonts in ui/code dropdowns", async () => {
     queryLocalFontsMock.mockResolvedValue([...mockedLocalFonts]);
     renderDisplaySection();
 
     await waitFor(() => {
       const uiFontSelect = screen.getByTestId("settings-ui-font-select");
+      const codeFontSelect = screen.getByTestId("settings-code-font-select");
       expect(within(uiFontSelect).getByRole("option", { name: "Avenir" })).toBeTruthy();
       expect(within(uiFontSelect).getByRole("option", { name: "Monaco" })).toBeTruthy();
+      expect(within(codeFontSelect).getByRole("option", { name: "Avenir" })).toBeTruthy();
+      expect(within(codeFontSelect).getByRole("option", { name: "Monaco" })).toBeTruthy();
     });
   });
 

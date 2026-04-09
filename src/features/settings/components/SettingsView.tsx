@@ -2238,7 +2238,6 @@ export function SettingsView({
                     handleCodeFontSelectChange={handleCodeFontSelectChange}
                     defaultCodePrimaryFont={defaultCodePrimaryFont}
                     setCodeFontDraft={setCodeFontDraft}
-                    handleCommitCodeFont={handleCommitCodeFont}
                     codeFontSizeDraft={codeFontSizeDraft}
                     setCodeFontSizeDraft={setCodeFontSizeDraft}
                     handleCommitCodeFontSize={handleCommitCodeFontSize}

@@ -1,0 +1,220 @@
+.settings-section-basic .settings-color-custom-label {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.settings-section-basic .settings-color-hex-input {
+  width: 120px;
+  min-height: 34px;
+  padding-inline: 10px;
+}
+
+.settings-section-basic .settings-color-reset {
+  min-height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
+  font-size: 12px;
+  min-width: 92px;
+}
+
+.settings-section-basic .settings-ui-font-reset {
+  min-width: 72px;
+  white-space: nowrap;
+}
+
+.settings-section-basic .settings-color-hint {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+.settings-section-basic .settings-sound-config {
+  margin: 0;
+  padding: 12px 16px 14px;
+}
+
+.settings-section-basic .settings-sound-config .settings-field.settings-basic-item {
+  padding: 0;
+  border-top: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-section-basic .settings-sound-select-row,
+.settings-section-basic .settings-sound-custom-path-row {
+  align-items: center;
+}
+
+.settings-section-basic .settings-sound-select-wrap {
+  width: 100%;
+}
+
+:root[data-theme="light"] .settings-section-basic {
+  --settings-basic-text: #171b23;
+  --settings-basic-text-muted: rgba(23, 27, 35, 0.68);
+  --settings-basic-surface: rgba(255, 255, 255, 0.94);
+  --settings-basic-surface-strong: rgba(246, 248, 252, 0.94);
+  --settings-basic-border: rgba(15, 23, 36, 0.12);
+  --settings-basic-divider: rgba(15, 23, 36, 0.09);
+  --settings-basic-control: rgba(15, 23, 36, 0.08);
+  --settings-basic-control-hover: rgba(15, 23, 36, 0.12);
+  --settings-basic-control-border: rgba(15, 23, 36, 0.2);
+}
+
+:root[data-theme="light"] .settings-section-basic .settings-basic-tab.active {
+  color: #12213e;
+  border-color: color-mix(in srgb, var(--primary) 45%, #8ba0c8 55%);
+  background: color-mix(in srgb, var(--primary) 26%, #d9e3f8);
+}
+
+:root[data-theme="light"] .settings-section-basic .settings-basic-theme-option.active {
+  color: #13243f;
+  border-color: color-mix(in srgb, var(--primary) 45%, #8ca1ca 55%);
+  background: color-mix(in srgb, var(--primary) 20%, #dee6f8);
+}
+
+:root[data-theme="light"] .settings-section-basic .settings-basic-language-option.active {
+  color: #13243f;
+  border-color: color-mix(in srgb, var(--primary) 45%, #8ca1ca 55%);
+  background: color-mix(in srgb, var(--primary) 20%, #dee6f8);
+}
+
+:root[data-theme="light"] .settings-section-basic .settings-basic-theme-icon-system {
+  background: #56719a;
+  border-color: #4c658c;
+  color: #f8fbff;
+}
+
+:root[data-theme="light"] .settings-section-basic .settings-basic-theme-icon-light {
+  background: #ffffff;
+  border-color: #8fa2c4;
+  color: #2f405e;
+}
+
+:root[data-theme="light"] .settings-section-basic .settings-basic-theme-icon-dark {
+  background: #1f2a3c;
+  border-color: #172132;
+  color: #e5edf9;
+}
+
+:root[data-theme="light"] .settings-section-basic .settings-toggle-row [data-slot="switch"] [data-slot="switch-thumb"] {
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-section-basic {
+    --settings-basic-text: #171b23;
+    --settings-basic-text-muted: rgba(23, 27, 35, 0.68);
+    --settings-basic-surface: rgba(255, 255, 255, 0.94);
+    --settings-basic-surface-strong: rgba(246, 248, 252, 0.94);
+    --settings-basic-border: rgba(15, 23, 36, 0.12);
+    --settings-basic-divider: rgba(15, 23, 36, 0.09);
+    --settings-basic-control: rgba(15, 23, 36, 0.08);
+    --settings-basic-control-hover: rgba(15, 23, 36, 0.12);
+    --settings-basic-control-border: rgba(15, 23, 36, 0.2);
+  }
+
+  :root:not([data-theme]) .settings-section-basic .settings-basic-tab.active {
+    color: #12213e;
+    border-color: color-mix(in srgb, var(--primary) 45%, #8ba0c8 55%);
+    background: color-mix(in srgb, var(--primary) 26%, #d9e3f8);
+  }
+
+  :root:not([data-theme]) .settings-section-basic .settings-basic-theme-option.active {
+    color: #13243f;
+    border-color: color-mix(in srgb, var(--primary) 45%, #8ca1ca 55%);
+    background: color-mix(in srgb, var(--primary) 20%, #dee6f8);
+  }
+
+  :root:not([data-theme]) .settings-section-basic .settings-basic-language-option.active {
+    color: #13243f;
+    border-color: color-mix(in srgb, var(--primary) 45%, #8ca1ca 55%);
+    background: color-mix(in srgb, var(--primary) 20%, #dee6f8);
+  }
+
+  :root:not([data-theme]) .settings-section-basic .settings-basic-theme-icon-system {
+    background: #56719a;
+    border-color: #4c658c;
+    color: #f8fbff;
+  }
+
+  :root:not([data-theme]) .settings-section-basic .settings-basic-theme-icon-light {
+    background: #ffffff;
+    border-color: #8fa2c4;
+    color: #2f405e;
+  }
+
+  :root:not([data-theme]) .settings-section-basic .settings-basic-theme-icon-dark {
+    background: #1f2a3c;
+    border-color: #172132;
+    color: #e5edf9;
+  }
+
+  :root:not([data-theme]) .settings-section-basic .settings-toggle-row [data-slot="switch"] [data-slot="switch-thumb"] {
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+  }
+}
+
+@media (max-width: 1080px) {
+  .settings-section-basic .settings-section-title {
+    font-size: 26px;
+  }
+
+  .settings-section-basic .settings-field.settings-basic-item,
+  .settings-section-basic .settings-basic-theme-field.settings-basic-item,
+  .settings-section-basic .settings-row.settings-basic-item {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "label"
+      "control"
+      "help";
+  }
+
+  .settings-section-basic .settings-basic-theme-selector {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .settings-section-basic .settings-basic-language-selector {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .settings-section-basic .settings-shortcut-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-section-basic .settings-color-config-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-section-basic .settings-color-preset-grid,
+  .settings-section-basic .settings-color-custom-row,
+  .settings-section-basic .settings-color-hint {
+    grid-column: 1;
+  }
+
+  .settings-section-basic .settings-color-custom-row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-section-basic .settings-toggle-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-section-basic .settings-toggle-row [data-slot="switch"] {
+    justify-self: flex-start;
+  }
+
+  .settings-section-basic .settings-color-custom-row,
+  .settings-section-basic .settings-field-row,
+  .settings-section-basic .settings-sound-custom-path-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -38,8 +38,10 @@ type BasicAppearanceSectionProps = {
   defaultUiPrimaryFont: string;
   setUiFontDraft: (next: string) => void;
   codeFontDraft: string;
+  codeFontSelectOptions: string[];
+  handleCodeFontSelectChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+  defaultCodePrimaryFont: string;
   setCodeFontDraft: (next: string) => void;
-  handleCommitCodeFont: () => Promise<void>;
   codeFontSizeDraft: number;
   setCodeFontSizeDraft: (next: number) => void;
   handleCommitCodeFontSize: (nextSize: number) => Promise<void>;
@@ -71,8 +73,10 @@ export function BasicAppearanceSection({
   defaultUiPrimaryFont,
   setUiFontDraft,
   codeFontDraft,
+  codeFontSelectOptions,
+  handleCodeFontSelectChange,
+  defaultCodePrimaryFont,
   setCodeFontDraft,
-  handleCommitCodeFont,
   codeFontSizeDraft,
   setCodeFontSizeDraft,
   handleCommitCodeFontSize,
@@ -155,7 +159,7 @@ export function BasicAppearanceSection({
         <div className="settings-field settings-basic-item">
           <div className="settings-basic-field-header">
             <Type className="settings-basic-field-icon" aria-hidden />
-            <span className="settings-basic-field-label">{t("settings.fontSizeLabel")}</span>
+            <span className="settings-basic-field-label">{t("settings.interfaceScale")}</span>
           </div>
           <div className="settings-control settings-scale-control">
             <input
@@ -164,7 +168,7 @@ export function BasicAppearanceSection({
               max={2.6}
               step={0.01}
               className="settings-input settings-input--range"
-              aria-label={t("settings.fontSizeLabel")}
+              aria-label={t("settings.interfaceScaleAriaLabel")}
               value={uiScaleDraft}
               onChange={(event) => {
                 const parsed = Number(event.target.value);
@@ -272,12 +276,12 @@ export function BasicAppearanceSection({
         </div>
       </div>
       <div className="settings-basic-group-card settings-basic-group-card--list">
-        <div className="settings-field settings-basic-item">
+        <div className="settings-field settings-basic-item settings-basic-font-field">
           <label className="settings-field-label" htmlFor="ui-font-family">
             {t("settings.uiFontFamily")}
           </label>
-          <div className="settings-field-row">
-            <div className="settings-select-wrap">
+          <div className="settings-field-row settings-field-row--font">
+            <div className="settings-select-wrap settings-select-wrap--font">
               <select
                 id="ui-font-family"
                 className="settings-select"
@@ -294,7 +298,7 @@ export function BasicAppearanceSection({
             </div>
             <button
               type="button"
-              className="ghost settings-button-compact settings-ui-font-reset"
+              className="ghost settings-button-compact settings-ui-font-reset settings-font-reset"
               onClick={() => {
                 setUiFontDraft(defaultUiPrimaryFont);
                 void onUpdateAppSettings({
@@ -310,32 +314,31 @@ export function BasicAppearanceSection({
             {t("settings.uiFontFamilyDesc")}
           </div>
         </div>
-        <div className="settings-field settings-basic-item">
+        <div className="settings-field settings-basic-item settings-basic-font-field">
           <label className="settings-field-label" htmlFor="code-font-family">
             {t("settings.codeFontFamily")}
           </label>
-          <div className="settings-field-row">
-            <input
-              id="code-font-family"
-              type="text"
-              className="settings-input"
-              value={codeFontDraft}
-              onChange={(event) => setCodeFontDraft(event.target.value)}
-              onBlur={() => {
-                void handleCommitCodeFont();
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void handleCommitCodeFont();
-                }
-              }}
-            />
+          <div className="settings-field-row settings-field-row--font">
+            <div className="settings-select-wrap settings-select-wrap--font">
+              <select
+                id="code-font-family"
+                className="settings-select"
+                value={codeFontDraft}
+                onChange={handleCodeFontSelectChange}
+                data-testid="settings-code-font-select"
+              >
+                {codeFontSelectOptions.map((fontName) => (
+                  <option key={fontName} value={fontName}>
+                    {fontName}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               type="button"
-              className="ghost settings-button-compact"
+              className="ghost settings-button-compact settings-font-reset"
               onClick={() => {
-                setCodeFontDraft(DEFAULT_CODE_FONT_FAMILY);
+                setCodeFontDraft(defaultCodePrimaryFont);
                 void onUpdateAppSettings({
                   ...appSettings,
                   codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
