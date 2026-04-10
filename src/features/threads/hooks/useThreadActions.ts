@@ -600,6 +600,20 @@ export function useThreadActions({
     async (workspaceId: string, options?: { activate?: boolean; engine?: "claude" | "codex" | "gemini" | "opencode" }) => {
       const shouldActivate = options?.activate !== false;
       const engine = options?.engine;
+      const resolveStartedThread = (
+        response: Record<string, unknown> | null | undefined,
+      ) => {
+        const threadId = extractThreadId(response);
+        if (threadId) {
+          dispatch({ type: "ensureThread", workspaceId, threadId, engine: "codex" });
+          if (shouldActivate) {
+            dispatch({ type: "setActiveThreadId", workspaceId, threadId });
+          }
+          loadedThreadsRef.current[threadId] = true;
+          return threadId;
+        }
+        return null;
+      };
 
       // For local CLI engines (Claude/Gemini/OpenCode), generate a local pending thread ID.
       if (engine === "claude" || engine === "gemini" || engine === "opencode") {
@@ -639,17 +653,38 @@ export function useThreadActions({
           label: "thread/start response",
           payload: response,
         });
-        const threadId = extractThreadId(response);
-        if (threadId) {
-          dispatch({ type: "ensureThread", workspaceId, threadId, engine: "codex" });
-          if (shouldActivate) {
-            dispatch({ type: "setActiveThreadId", workspaceId, threadId });
-          }
-          loadedThreadsRef.current[threadId] = true;
-          return threadId;
-        }
-        return null;
+        return resolveStartedThread(response);
       } catch (error) {
+        if (isWorkspaceNotConnectedError(error)) {
+          onDebug?.({
+            id: `${Date.now()}-client-workspace-reconnect-before-thread-start`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "workspace/reconnect before thread start",
+            payload: { workspaceId },
+          });
+          try {
+            await connectWorkspaceService(workspaceId);
+            const retryResponse = await startThreadService(workspaceId);
+            onDebug?.({
+              id: `${Date.now()}-server-thread-start-retry`,
+              timestamp: Date.now(),
+              source: "server",
+              label: "thread/start retry response",
+              payload: retryResponse,
+            });
+            return resolveStartedThread(retryResponse);
+          } catch (retryError) {
+            onDebug?.({
+              id: `${Date.now()}-client-thread-start-error`,
+              timestamp: Date.now(),
+              source: "error",
+              label: "thread/start error",
+              payload: retryError instanceof Error ? retryError.message : String(retryError),
+            });
+            throw retryError;
+          }
+        }
         onDebug?.({
           id: `${Date.now()}-client-thread-start-error`,
           timestamp: Date.now(),
@@ -1234,24 +1269,42 @@ export function useThreadActions({
         let cursor: string | null = null;
         do {
           pagesFetched += 1;
-          const response = (await (async () => {
-            try {
-              return await listThreadsService(workspace.id, cursor, pageSize);
-            } catch (error) {
-              if (!isWorkspaceNotConnectedError(error)) {
-                throw error;
+          let response: Record<string, unknown>;
+          try {
+            response = (await (async () => {
+              try {
+                return await listThreadsService(workspace.id, cursor, pageSize);
+              } catch (error) {
+                if (!isWorkspaceNotConnectedError(error)) {
+                  throw error;
+                }
+                onDebug?.({
+                  id: `${Date.now()}-client-workspace-reconnect-before-thread-list`,
+                  timestamp: Date.now(),
+                  source: "client",
+                  label: "workspace/reconnect before thread list",
+                  payload: { workspaceId: workspace.id },
+                });
+                await connectWorkspaceService(workspace.id);
+                return await listThreadsService(workspace.id, cursor, pageSize);
               }
-              onDebug?.({
-                id: `${Date.now()}-client-workspace-reconnect-before-thread-list`,
-                timestamp: Date.now(),
-                source: "client",
-                label: "workspace/reconnect before thread list",
-                payload: { workspaceId: workspace.id },
-              });
-              await connectWorkspaceService(workspace.id);
-              return await listThreadsService(workspace.id, cursor, pageSize);
+            })()) as Record<string, unknown>;
+          } catch (error) {
+            if (!isWorkspaceNotConnectedError(error)) {
+              throw error;
             }
-          })()) as Record<string, unknown>;
+            onDebug?.({
+              id: `${Date.now()}-client-thread-list-codex-unavailable`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "thread/list codex unavailable",
+              payload: {
+                workspaceId: workspace.id,
+                reason: error instanceof Error ? error.message : String(error),
+              },
+            });
+            break;
+          }
           onDebug?.({
             id: `${Date.now()}-server-thread-list`,
             timestamp: Date.now(),

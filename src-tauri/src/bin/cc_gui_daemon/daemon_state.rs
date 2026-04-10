@@ -383,13 +383,19 @@ impl DaemonState {
             }
         }
 
+        let active_engine = *self.active_engine.lock().await;
         {
             let workspaces = self.workspaces.lock().await;
             let entry = workspaces
                 .get(&id)
                 .ok_or_else(|| "workspace not found".to_string())?;
-            if !workspaces_core::workspace_requires_persistent_session(entry) {
-                // Claude/Gemini/OpenCode do not require a persistent workspace session.
+            let should_connect_for_active_codex =
+                active_engine == engine::EngineType::Codex;
+            if !workspaces_core::workspace_requires_persistent_session(entry)
+                && !should_connect_for_active_codex
+            {
+                // Claude/Gemini/OpenCode do not require a persistent workspace session
+                // unless the currently active engine is Codex.
                 return Ok(());
             }
         }

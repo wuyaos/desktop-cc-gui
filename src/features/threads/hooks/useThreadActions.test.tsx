@@ -169,6 +169,37 @@ describe("useThreadActions", () => {
     expect(loadedThreadsRef.current["thread-1"]).toBe(true);
   });
 
+  it("reconnects workspace and retries when codex start thread reports not connected", async () => {
+    vi.mocked(startThread)
+      .mockRejectedValueOnce(new Error("workspace not connected"))
+      .mockResolvedValueOnce({
+        result: { thread: { id: "thread-retry" } },
+      });
+
+    const { result, dispatch, loadedThreadsRef } = renderActions();
+
+    let threadId: string | null = null;
+    await act(async () => {
+      threadId = await result.current.startThreadForWorkspace("ws-1");
+    });
+
+    expect(threadId).toBe("thread-retry");
+    expect(connectWorkspace).toHaveBeenCalledWith("ws-1");
+    expect(startThread).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-retry",
+      engine: "codex",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setActiveThreadId",
+      workspaceId: "ws-1",
+      threadId: "thread-retry",
+    });
+    expect(loadedThreadsRef.current["thread-retry"]).toBe(true);
+  });
+
   it("starts a thread when start_thread returns result.threadId", async () => {
     vi.mocked(startThread).mockResolvedValue({
       result: { threadId: "thread-1" },
@@ -1370,6 +1401,41 @@ describe("useThreadActions", () => {
           name: "Recovered",
           updatedAt: 1000,
           engineSource: "codex",
+        },
+      ],
+    });
+  });
+
+  it("falls back to claude sessions when codex thread list remains not connected after retry", async () => {
+    vi.mocked(listThreads)
+      .mockRejectedValueOnce(new Error("workspace not connected"))
+      .mockRejectedValueOnce(new Error("workspace not connected"));
+    vi.mocked(listClaudeSessions).mockResolvedValue([
+      {
+        sessionId: "claude-fallback-1",
+        firstMessage: "Claude recovered history",
+        updatedAt: 1_730_100_000_000,
+      },
+    ]);
+    vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(connectWorkspace).toHaveBeenCalledWith("ws-1");
+    expect(listThreads).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [
+        {
+          id: "claude:claude-fallback-1",
+          name: "Claude recovered history",
+          updatedAt: 1_730_100_000_000,
+          engineSource: "claude",
         },
       ],
     });
