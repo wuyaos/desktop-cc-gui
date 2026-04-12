@@ -1485,6 +1485,28 @@ export async function readExternalAbsoluteFile(
   });
 }
 
+export type FilePreviewHandle = {
+  absolutePath: string;
+  byteLength: number;
+  extension: string | null;
+};
+
+export async function resolveFilePreviewHandle(
+  workspaceId: string,
+  options: {
+    domain: "workspace" | "external-spec" | "external-absolute";
+    path: string;
+    specRoot?: string | null;
+  },
+): Promise<FilePreviewHandle> {
+  return invoke<FilePreviewHandle>("resolve_file_preview_handle", {
+    workspaceId,
+    domain: options.domain,
+    path: options.path,
+    specRoot: options.specRoot ?? null,
+  });
+}
+
 export async function readLocalImageDataUrl(
   workspaceId: string,
   path: string,

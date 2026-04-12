@@ -14,6 +14,7 @@ import {
 } from "../../../services/tauri";
 import { subscribeDetachedExternalFileChanges } from "../../../services/events";
 import { pushErrorToast } from "../../../services/toasts";
+import { useFilePreviewPayload } from "../hooks/useFilePreviewPayload";
 
 const mockCodeMirrorDispatch = vi.fn();
 let detachedExternalFileChangeListener: ((event: any) => void) | null = null;
@@ -109,6 +110,79 @@ vi.mock("@uiw/react-codemirror", async () => {
 
 vi.mock("../../app/components/OpenAppMenu", () => ({
   OpenAppMenu: () => <div data-testid="open-app-menu" />,
+}));
+
+vi.mock("./FilePdfPreview", () => ({
+  FilePdfPreview: () => <div data-testid="pdf-preview" />,
+}));
+
+vi.mock("./FileTabularPreview", () => ({
+  FileTabularPreview: () => <div data-testid="tabular-preview" />,
+}));
+
+vi.mock("./FileDocumentPreview", () => ({
+  FileDocumentPreview: () => <div data-testid="document-preview" />,
+}));
+
+vi.mock("../hooks/useFilePreviewPayload", () => ({
+  useFilePreviewPayload: vi.fn((args: { enabled: boolean; renderProfile: { extension: string | null } }) => {
+    if (!args.enabled) {
+      return {
+        payload: null,
+        isLoading: false,
+        error: null,
+      };
+    }
+    const extension = args.renderProfile.extension;
+    if (extension === "pdf") {
+      return {
+        payload: {
+          kind: "file-handle",
+          sourceKind: "file-handle",
+          absolutePath: "/repo/docs/report.pdf",
+          assetUrl: "asset://localhost/repo/docs/report.pdf",
+          extension,
+          byteLength: 4096,
+        },
+        isLoading: false,
+        error: null,
+      };
+    }
+    if (extension === "docx" || extension === "doc") {
+      return {
+        payload: extension === "doc"
+          ? {
+              kind: "unsupported",
+              sourceKind: "file-handle",
+              reason: "legacy-doc",
+            }
+          : {
+              kind: "extracted-structure",
+              sourceKind: "extracted-structure",
+              absolutePath: "/repo/docs/report.docx",
+              assetUrl: "asset://localhost/repo/docs/report.docx",
+              extension,
+              byteLength: 2048,
+              html: "<p>Converted document</p>",
+              warnings: [],
+            },
+        isLoading: false,
+        error: null,
+      };
+    }
+    return {
+      payload: {
+        kind: "inline-bytes",
+        sourceKind: "inline-bytes",
+        text: "name,value\nalpha,1",
+        extension,
+        byteLength: 18,
+        truncated: false,
+      },
+      isLoading: false,
+      error: null,
+    };
+  }),
 }));
 
 vi.mock("../../../components/FileIcon", () => ({
@@ -1438,6 +1512,106 @@ describe("FileViewPanel markdown modes", () => {
     await waitFor(() => {
       expect(container.querySelector(".fvp-code-preview")).toBeTruthy();
     });
+  });
+});
+
+describe("FileViewPanel document preview modes", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("routes pdf files into the dedicated pdf preview surface", async () => {
+    render(
+      <FileViewPanel
+        workspaceId="ws-pdf"
+        workspacePath="/repo"
+        filePath="docs/report.pdf"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("pdf-preview")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("mock-codemirror")).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
+  });
+
+  it("routes docx files into the dedicated document preview surface", async () => {
+    render(
+      <FileViewPanel
+        workspaceId="ws-docx"
+        workspacePath="/repo"
+        filePath="docs/report.docx"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("document-preview")).toBeTruthy();
+    });
+    expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
+  });
+
+  it("normalizes workspace absolute paths before passing preview payloads on Windows", async () => {
+    render(
+      <FileViewPanel
+        workspaceId="ws-docx-win"
+        workspacePath={"C:\\Repo"}
+        filePath="docs/report.docx"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("document-preview")).toBeTruthy();
+    });
+
+    expect(vi.mocked(useFilePreviewPayload)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        absolutePath: "C:/Repo/docs/report.docx",
+      }),
+    );
+  });
+
+  it("keeps csv on table preview by default but still allows plain-text edit", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "name,value\nalpha,1",
+      truncated: false,
+    });
+
+    render(
+      <FileViewPanel
+        workspaceId="ws-csv"
+        workspacePath="/repo"
+        filePath="docs/report.csv"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("tabular-preview")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    expect(await screen.findByTestId("mock-codemirror")).not.toBeNull();
   });
 });
 

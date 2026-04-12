@@ -14,7 +14,7 @@ type UseFileDocumentStateArgs = {
   customSpecRoot: string | null;
   workspaceRelativeFilePath: string;
   fileReadTarget: FileReadTarget;
-  isBinary: boolean;
+  skipTextRead: boolean;
   externalAbsoluteReadOnlyMessage: string;
 };
 
@@ -23,7 +23,7 @@ export function useFileDocumentState({
   customSpecRoot,
   workspaceRelativeFilePath,
   fileReadTarget,
-  isBinary,
+  skipTextRead,
   externalAbsoluteReadOnlyMessage,
 }: UseFileDocumentStateArgs) {
   const [content, setContent] = useState("");
@@ -38,13 +38,19 @@ export function useFileDocumentState({
   const saveRequestIdRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const latestContentRef = useRef(content);
+  const fileReadTargetDomain = fileReadTarget.domain;
+  const fileReadNormalizedInputPath = fileReadTarget.normalizedInputPath;
+  const fileReadExternalSpecLogicalPath =
+    fileReadTargetDomain === "external-spec"
+      ? fileReadTarget.externalSpecLogicalPath
+      : null;
 
   const isDirty = useMemo(() => content !== savedContentRef.current, [content]);
   latestIsDirtyRef.current = isDirty;
   latestContentRef.current = content;
 
   useEffect(() => {
-    if (isBinary) {
+    if (skipTextRead) {
       setIsLoading(false);
       setError(null);
       setContent("");
@@ -63,7 +69,7 @@ export function useFileDocumentState({
     setIsSaving(false);
     setError(null);
 
-    if (fileReadTarget.domain === "invalid") {
+    if (fileReadTargetDomain === "invalid") {
       setError("Invalid file path");
       setContent("");
       savedContentRef.current = "";
@@ -74,11 +80,11 @@ export function useFileDocumentState({
     }
 
     const readPromise =
-      fileReadTarget.domain === "external-spec" && customSpecRoot
+      fileReadTargetDomain === "external-spec" && customSpecRoot && fileReadExternalSpecLogicalPath
         ? readExternalSpecFile(
             workspaceId,
             customSpecRoot,
-            fileReadTarget.externalSpecLogicalPath,
+            fileReadExternalSpecLogicalPath,
           ).then((response) => {
             if (!response.exists) {
               throw new Error("Failed to open file: File does not exist");
@@ -88,10 +94,10 @@ export function useFileDocumentState({
               truncated: Boolean(response.truncated),
             };
           })
-        : fileReadTarget.domain === "external-absolute"
+        : fileReadTargetDomain === "external-absolute"
           ? readExternalAbsoluteFile(
               workspaceId,
-              fileReadTarget.normalizedInputPath,
+              fileReadNormalizedInputPath,
             )
           : readWorkspaceFile(workspaceId, workspaceRelativeFilePath);
 
@@ -123,8 +129,10 @@ export function useFileDocumentState({
     };
   }, [
     customSpecRoot,
-    fileReadTarget,
-    isBinary,
+    fileReadExternalSpecLogicalPath,
+    fileReadNormalizedInputPath,
+    fileReadTargetDomain,
+    skipTextRead,
     workspaceId,
     workspaceRelativeFilePath,
   ]);
@@ -140,19 +148,19 @@ export function useFileDocumentState({
     setIsSaving(true);
     try {
       if (
-        fileReadTarget.domain === "external-spec" &&
+        fileReadTargetDomain === "external-spec" &&
         customSpecRoot &&
-        fileReadTarget.externalSpecLogicalPath
+        fileReadExternalSpecLogicalPath
       ) {
         await writeExternalSpecFile(
           workspaceId,
           customSpecRoot,
-          fileReadTarget.externalSpecLogicalPath,
+          fileReadExternalSpecLogicalPath,
           contentToSave,
         );
-      } else if (fileReadTarget.domain === "external-absolute") {
+      } else if (fileReadTargetDomain === "external-absolute") {
         throw new Error(externalAbsoluteReadOnlyMessage);
-      } else if (fileReadTarget.domain === "invalid") {
+      } else if (fileReadTargetDomain === "invalid") {
         throw new Error("Invalid file path");
       } else {
         await writeWorkspaceFile(workspaceId, workspaceRelativeFilePath, contentToSave);
@@ -184,7 +192,8 @@ export function useFileDocumentState({
   }, [
     customSpecRoot,
     externalAbsoluteReadOnlyMessage,
-    fileReadTarget,
+    fileReadExternalSpecLogicalPath,
+    fileReadTargetDomain,
     isDirty,
     isSaving,
     truncated,

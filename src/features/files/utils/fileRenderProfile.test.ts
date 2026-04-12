@@ -45,18 +45,24 @@ describe("fileRenderProfile", () => {
   it("keeps binary, image, markdown, and unknown text fallback semantics stable", () => {
     expect(resolveFileRenderProfile("assets/logo.SVG")).toMatchObject({
       kind: "image",
+      previewMode: "image-preview",
+      previewSourceKind: "asset-url",
       fallbackBehavior: "image-preview",
       editCapability: "read-only",
     });
 
     expect(resolveFileRenderProfile("artifacts/archive.zip")).toMatchObject({
       kind: "binary-unsupported",
+      previewMode: "binary-unsupported",
+      previewSourceKind: null,
       fallbackBehavior: "binary-unsupported",
       editCapability: "read-only",
     });
 
     expect(resolveFileRenderProfile("/Users/dev/project/README.md")).toMatchObject({
       kind: "markdown",
+      previewMode: "markdown-preview",
+      previewSourceKind: "inline-bytes",
       previewLanguage: "markdown",
       editorLanguage: "markdown",
       editCapability: "full",
@@ -64,9 +70,63 @@ describe("fileRenderProfile", () => {
 
     expect(resolveFileRenderProfile("notes/README")).toMatchObject({
       kind: "text",
+      previewMode: "text-preview",
+      previewSourceKind: "inline-bytes",
       previewLanguage: null,
       editorLanguage: null,
       editCapability: "plain-text",
+    });
+  });
+
+  it("resolves the document preview matrix without over-promising legacy binary formats", () => {
+    expect(resolveFileRenderProfile("docs/report.pdf")).toMatchObject({
+      kind: "pdf",
+      previewMode: "pdf-preview",
+      previewSourceKind: "file-handle",
+      editCapability: "read-only",
+    });
+
+    expect(resolveFileRenderProfile("docs/spec-sheet.csv")).toMatchObject({
+      kind: "tabular",
+      previewMode: "tabular-preview",
+      previewSourceKind: "inline-bytes",
+      editCapability: "plain-text",
+    });
+
+    expect(resolveFileRenderProfile("docs/budget.XLSX")).toMatchObject({
+      kind: "tabular",
+      previewMode: "tabular-preview",
+      previewSourceKind: "file-handle",
+      editCapability: "read-only",
+    });
+
+    expect(resolveFileRenderProfile("docs/legacy.xls")).toMatchObject({
+      kind: "tabular",
+      previewMode: "tabular-preview",
+      previewSourceKind: "file-handle",
+      editCapability: "read-only",
+    });
+
+    expect(resolveFileRenderProfile("docs/proposal.docx")).toMatchObject({
+      kind: "document",
+      previewMode: "document-preview",
+      previewSourceKind: "extracted-structure",
+      editCapability: "read-only",
+    });
+
+    expect(resolveFileRenderProfile("docs/proposal.doc")).toMatchObject({
+      kind: "document",
+      previewMode: "document-preview",
+      previewSourceKind: "file-handle",
+      fallbackBehavior: "external-open",
+      editCapability: "read-only",
+    });
+
+    expect(resolveFileRenderProfile("C:\\Repo\\preview\\SHOT.JPEG")).toMatchObject({
+      kind: "image",
+      previewMode: "image-preview",
+      normalizedLookupPath: "C:/Repo/preview/SHOT.JPEG",
+      filenameMatchKey: "shot.jpeg",
     });
   });
 

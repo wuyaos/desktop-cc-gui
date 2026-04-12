@@ -12,7 +12,10 @@ export type FileViewSurfaceKind =
   | "editor"
   | "markdown-preview"
   | "structured-preview"
-  | "code-preview";
+  | "code-preview"
+  | "pdf-preview"
+  | "tabular-preview"
+  | "document-preview";
 
 export type FileViewSurface = {
   kind: FileViewSurfaceKind;
@@ -23,7 +26,14 @@ export function resolveDefaultFileViewMode(
   renderProfile: FileRenderProfile,
   initialMode: FileViewMode,
 ): FileViewMode {
-  return renderProfile.kind === "markdown" ? "preview" : initialMode;
+  if (
+    renderProfile.kind === "markdown" ||
+    renderProfile.editCapability === "read-only" ||
+    renderProfile.kind === "tabular"
+  ) {
+    return "preview";
+  }
+  return initialMode;
 }
 
 export function resolveFileViewSurface(
@@ -47,25 +57,57 @@ export function resolveFileViewSurface(
     };
   }
 
-  if (mode === "edit") {
+  if (mode === "edit" && renderProfile.editCapability !== "read-only") {
     return {
       kind: "editor",
       useLowCostPreview,
     };
   }
 
-  if (renderProfile.kind === "markdown" && !useLowCostPreview) {
-    return {
-      kind: "markdown-preview",
-      useLowCostPreview: false,
-    };
-  }
-
-  if (renderProfile.structuredKind && !useLowCostPreview) {
-    return {
-      kind: "structured-preview",
-      useLowCostPreview: false,
-    };
+  switch (renderProfile.previewMode) {
+    case "markdown-preview":
+      if (!useLowCostPreview) {
+        return {
+          kind: "markdown-preview",
+          useLowCostPreview: false,
+        };
+      }
+      break;
+    case "structured-preview":
+      if (!useLowCostPreview) {
+        return {
+          kind: "structured-preview",
+          useLowCostPreview: false,
+        };
+      }
+      break;
+    case "pdf-preview":
+      return {
+        kind: "pdf-preview",
+        useLowCostPreview: false,
+      };
+    case "tabular-preview":
+      return {
+        kind: "tabular-preview",
+        useLowCostPreview: false,
+      };
+    case "document-preview":
+      return {
+        kind: "document-preview",
+        useLowCostPreview: false,
+      };
+    case "image-preview":
+      return {
+        kind: "image",
+        useLowCostPreview: false,
+      };
+    case "binary-unsupported":
+      return {
+        kind: "binary-unsupported",
+        useLowCostPreview: false,
+      };
+    default:
+      break;
   }
 
   return {

@@ -29,7 +29,7 @@ type HookProps = {
   customSpecRoot: string | null;
   workspaceRelativeFilePath: string;
   fileReadTarget: FileReadTarget;
-  isBinary: boolean;
+  skipTextRead: boolean;
   externalAbsoluteReadOnlyMessage: string;
 };
 
@@ -60,7 +60,7 @@ describe("useFileDocumentState", () => {
           customSpecRoot: null,
           workspaceRelativeFilePath: "src/value.ts",
           fileReadTarget: makeWorkspaceTarget("src/value.ts"),
-          isBinary: false,
+          skipTextRead: false,
           externalAbsoluteReadOnlyMessage: "read only",
         },
       },
@@ -80,7 +80,7 @@ describe("useFileDocumentState", () => {
         normalizedInputPath: "",
         workspaceRelativePath: "",
       },
-      isBinary: false,
+      skipTextRead: false,
       externalAbsoluteReadOnlyMessage: "read only",
     });
 
@@ -114,7 +114,7 @@ describe("useFileDocumentState", () => {
           customSpecRoot: null,
           workspaceRelativeFilePath: "src/value.ts",
           fileReadTarget: makeWorkspaceTarget("src/value.ts"),
-          isBinary: false,
+          skipTextRead: false,
           externalAbsoluteReadOnlyMessage: "read only",
         },
       },

@@ -408,6 +408,31 @@ const enPart2 = {
     // File preview
     noSelection: "No selection",
     imagePreview: "Image preview",
+    pdfPreviewTitle: "PDF preview",
+    pdfPreviewPageCount: "{{count}} page(s)",
+    pdfPreviewPageLabel: "Page {{page}}",
+    pdfPreviewPagePlaceholder: "Page enters viewport to render.",
+    pdfPreviewUnavailable: "PDF preview is unavailable for this file.",
+    pdfPreviewPageLimitHint:
+      "Showing the first {{visibleCount}} of {{totalCount}} pages to keep preview bounded.",
+    tabularPreviewTitle: "Table preview",
+    tabularPreviewSheets: "Workbook sheets",
+    tabularPreviewSheetStats: "{{rows}} rows · {{columns}} columns",
+    tabularPreviewTruncatedHint:
+      "Preview stays bounded to the first {{rows}} rows and {{columns}} columns.",
+    tabularPreviewEmpty: "No visible table cells.",
+    tabularPreviewUnavailable: "Table preview is unavailable for this file.",
+    tabularPreviewTooLarge:
+      "Table preview is limited to files up to {{maxMb}} MB. Open externally for larger workbooks.",
+    documentPreviewTitle: "Document preview",
+    documentPreviewUnavailable: "Document preview is unavailable for this file.",
+    documentPreviewLegacyDocFallback:
+      "Legacy .doc files are kept on explicit fallback. Open externally or convert to .docx for rich preview.",
+    documentPreviewFallbackHint:
+      "This proposal only commits stable rich preview for .docx. Legacy .doc remains a guarded fallback path.",
+    documentPreviewByteLength: "{{bytes}} bytes",
+    documentPreviewTooLarge:
+      "Document preview is limited to files up to {{maxMb}} MB. Open externally or shrink the document first.",
     clearSelection: "Clear",
     addToChat: "Add to chat",
     selectionHintShiftClick: "Shift + click or drag + click",

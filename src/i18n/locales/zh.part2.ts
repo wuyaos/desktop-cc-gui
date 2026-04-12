@@ -393,6 +393,30 @@ const zhPart2 = {
     // 文件预览
     noSelection: "未选择",
     imagePreview: "图片预览",
+    pdfPreviewTitle: "PDF 预览",
+    pdfPreviewPageCount: "{{count}} 页",
+    pdfPreviewPageLabel: "第 {{page}} 页",
+    pdfPreviewPagePlaceholder: "滚动到可视区域后再渲染该页。",
+    pdfPreviewUnavailable: "当前文件暂时无法提供 PDF 预览。",
+    pdfPreviewPageLimitHint:
+      "为保证预览有界，只显示前 {{visibleCount}} / {{totalCount}} 页。",
+    tabularPreviewTitle: "表格预览",
+    tabularPreviewSheets: "工作表",
+    tabularPreviewSheetStats: "{{rows}} 行 · {{columns}} 列",
+    tabularPreviewTruncatedHint: "预览会限制在前 {{rows}} 行、前 {{columns}} 列以内。",
+    tabularPreviewEmpty: "没有可显示的表格内容。",
+    tabularPreviewUnavailable: "当前文件暂时无法提供表格预览。",
+    tabularPreviewTooLarge:
+      "表格预览当前只支持 {{maxMb}} MB 以内的文件。更大的工作簿请改为外部打开。",
+    documentPreviewTitle: "文档预览",
+    documentPreviewUnavailable: "当前文件暂时无法提供文档预览。",
+    documentPreviewLegacyDocFallback:
+      "旧版 .doc 文件仅提供显式降级提示。请外部打开，或先转换为 .docx 再获取富预览。",
+    documentPreviewFallbackHint:
+      "本次提案只承诺 .docx 的稳定富预览，旧版 .doc 仍保持受控降级路径。",
+    documentPreviewByteLength: "{{bytes}} 字节",
+    documentPreviewTooLarge:
+      "文档预览当前只支持 {{maxMb}} MB 以内的文件。更大的文档请外部打开或先缩小内容。",
     clearSelection: "清除",
     addToChat: "添加到聊天",
     selectionHintShiftClick: "Shift + 点击或拖动 + 点击",

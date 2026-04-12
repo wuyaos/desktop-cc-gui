@@ -19,10 +19,12 @@ use super::files::{
     list_external_absolute_directory_children_inner, list_external_spec_tree_inner,
     list_workspace_directory_children_inner, list_workspace_files_inner,
     read_external_absolute_file_inner, read_external_spec_file_inner, read_workspace_file_inner,
+    resolve_external_absolute_preview_handle_inner,
+    resolve_external_spec_preview_handle_inner, resolve_workspace_preview_handle_inner,
     search_workspace_text_inner, trash_workspace_item_inner, write_external_absolute_file_inner,
     write_external_spec_file_inner, write_workspace_file_inner, ExternalSpecFileResponse,
-    WorkspaceFileResponse, WorkspaceFilesResponse, WorkspaceTextSearchOptions,
-    WorkspaceTextSearchResponse,
+    WorkspaceFileResponse, WorkspaceFilesResponse, WorkspacePreviewHandleResponse,
+    WorkspaceTextSearchOptions, WorkspaceTextSearchResponse,
 };
 use super::git::{
     git_branch_exists, git_find_remote_for_branch, git_get_origin_url, git_remote_branch_exists,
@@ -712,6 +714,64 @@ pub(crate) async fn read_external_absolute_file(
     };
 
     read_external_absolute_file_inner(&path, &allowed_roots)
+}
+
+#[tauri::command]
+pub(crate) async fn resolve_file_preview_handle(
+    workspace_id: String,
+    domain: String,
+    path: String,
+    spec_root: Option<String>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<WorkspacePreviewHandleResponse, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let response = remote_backend::call_remote(
+            &*state,
+            app,
+            "resolve_file_preview_handle",
+            json!({
+                "workspaceId": workspace_id,
+                "domain": domain,
+                "path": path,
+                "specRoot": spec_root,
+            }),
+        )
+        .await?;
+        return serde_json::from_value(response).map_err(|err| err.to_string());
+    }
+
+    match domain.as_str() {
+        "workspace" => {
+            workspaces_core::read_workspace_file_core(
+                &state.workspaces,
+                &workspace_id,
+                &path,
+                |root, rel_path| resolve_workspace_preview_handle_inner(root, rel_path),
+            )
+            .await
+        }
+        "external-spec" => {
+            {
+                let workspaces = state.workspaces.lock().await;
+                if !workspaces.contains_key(&workspace_id) {
+                    return Err(format!("Workspace not found: {workspace_id}"));
+                }
+            }
+
+            let root = spec_root.ok_or_else(|| "specRoot is required.".to_string())?;
+            resolve_external_spec_preview_handle_inner(&root, &path)
+        }
+        "external-absolute" => {
+            let allowed_roots = {
+                let workspaces = state.workspaces.lock().await;
+                allowed_external_skill_roots(&state, &workspaces, &workspace_id)?
+            };
+
+            resolve_external_absolute_preview_handle_inner(&path, &allowed_roots)
+        }
+        _ => Err("Unsupported preview handle domain.".to_string()),
+    }
 }
 
 #[tauri::command]

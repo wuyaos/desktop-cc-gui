@@ -48,6 +48,7 @@ import {
   setOpenCodeMcpToggle,
   readExternalSpecFile,
   readExternalAbsoluteFile,
+  resolveFilePreviewHandle,
   writeExternalSpecFile,
   writeExternalAbsoluteFile,
   engineSendMessageSync,
@@ -430,6 +431,27 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("read_external_absolute_file", {
       workspaceId: "ws-41",
       path: "/Users/demo/.codex/skills/openspec-apply-change/SKILL.md",
+    });
+  });
+
+  it("maps file preview handle payload", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      absolutePath: "/repo/docs/report.pdf",
+      byteLength: 2048,
+      extension: "pdf",
+    });
+
+    await resolveFilePreviewHandle("ws-41", {
+      domain: "workspace",
+      path: "docs/report.pdf",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("resolve_file_preview_handle", {
+      workspaceId: "ws-41",
+      domain: "workspace",
+      path: "docs/report.pdf",
+      specRoot: null,
     });
   });
 

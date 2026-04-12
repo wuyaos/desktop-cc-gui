@@ -7,8 +7,12 @@ import CodeMirror, {
   type ReactCodeMirrorProps,
   type ReactCodeMirrorRef,
 } from "@uiw/react-codemirror";
+import { FileDocumentPreview } from "./FileDocumentPreview";
 import { FileMarkdownPreview } from "./FileMarkdownPreview";
+import { FilePdfPreview } from "./FilePdfPreview";
 import { FileStructuredPreview } from "./FileStructuredPreview";
+import { FileTabularPreview } from "./FileTabularPreview";
+import type { FilePreviewPayload } from "../hooks/useFilePreviewPayload";
 import type { FileViewSurface } from "../utils/fileViewSurface";
 
 type FileViewBodyProps = {
@@ -18,6 +22,9 @@ type FileViewBodyProps = {
   handleImageLoad: (event: SyntheticEvent<HTMLImageElement>) => void;
   error: string | null;
   isLoading: boolean;
+  previewPayload: FilePreviewPayload | null;
+  previewPayloadLoading: boolean;
+  previewPayloadError: string | null;
   viewSurface: FileViewSurface;
   content: string;
   setContent: (value: string) => void;
@@ -42,6 +49,9 @@ export function FileViewBody({
   handleImageLoad,
   error,
   isLoading,
+  previewPayload,
+  previewPayloadLoading,
+  previewPayloadError,
   viewSurface,
   content,
   setContent,
@@ -94,6 +104,43 @@ export function FileViewBody({
 
   if (viewSurface.kind === "binary-unsupported") {
     return <div className="fvp-status">{t("files.unsupportedFormat")}</div>;
+  }
+
+  if (viewSurface.kind === "pdf-preview") {
+    return (
+      <FilePdfPreview
+        assetUrl={
+          previewPayload?.kind === "file-handle" || previewPayload?.kind === "asset-url"
+            ? previewPayload.assetUrl
+            : null
+        }
+        isLoading={previewPayloadLoading}
+        error={previewPayloadError}
+        t={t}
+      />
+    );
+  }
+
+  if (viewSurface.kind === "tabular-preview") {
+    return (
+      <FileTabularPreview
+        payload={previewPayload}
+        isLoading={previewPayloadLoading}
+        error={previewPayloadError}
+        t={t}
+      />
+    );
+  }
+
+  if (viewSurface.kind === "document-preview") {
+    return (
+      <FileDocumentPreview
+        payload={previewPayload}
+        isLoading={previewPayloadLoading}
+        error={previewPayloadError}
+        t={t}
+      />
+    );
   }
 
   if (viewSurface.kind === "editor") {

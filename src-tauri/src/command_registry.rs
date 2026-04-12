@@ -129,6 +129,7 @@ pub(crate) fn invoke_handler(
         crate::workspaces::read_workspace_file,
         crate::workspaces::read_external_spec_file,
         crate::workspaces::read_external_absolute_file,
+        crate::workspaces::resolve_file_preview_handle,
         crate::workspaces::read_local_image_data_url,
         crate::workspaces::write_workspace_file,
         crate::workspaces::create_workspace_directory,

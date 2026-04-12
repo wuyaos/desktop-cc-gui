@@ -15,6 +15,9 @@ describe("fileViewSurface", () => {
     const composeProfile = resolveFileRenderProfile("docker-compose.yml");
     const envProfile = resolveFileRenderProfile(".env.local");
     const gradleProfile = resolveFileRenderProfile("build.gradle.kts");
+    const pdfProfile = resolveFileRenderProfile("docs/report.pdf");
+    const csvProfile = resolveFileRenderProfile("docs/report.csv");
+    const docxProfile = resolveFileRenderProfile("docs/report.docx");
 
     expect(resolveDefaultFileViewMode(readmeProfile, "edit")).toBe("preview");
     expect(
@@ -70,6 +73,52 @@ describe("fileViewSurface", () => {
       ),
     ).toEqual({
       kind: "editor",
+      useLowCostPreview: false,
+    });
+
+    expect(resolveDefaultFileViewMode(pdfProfile, "edit")).toBe("preview");
+    expect(
+      resolveFileViewSurface(
+        pdfProfile,
+        "preview",
+        measureFilePreviewMetrics("", false),
+      ),
+    ).toEqual({
+      kind: "pdf-preview",
+      useLowCostPreview: false,
+    });
+
+    expect(resolveDefaultFileViewMode(csvProfile, "edit")).toBe("preview");
+    expect(
+      resolveFileViewSurface(
+        csvProfile,
+        "preview",
+        measureFilePreviewMetrics("name,value\nalpha,1", false),
+      ),
+    ).toEqual({
+      kind: "tabular-preview",
+      useLowCostPreview: false,
+    });
+    expect(
+      resolveFileViewSurface(
+        csvProfile,
+        "edit",
+        measureFilePreviewMetrics("name,value\nalpha,1", false),
+      ),
+    ).toEqual({
+      kind: "editor",
+      useLowCostPreview: false,
+    });
+
+    expect(resolveDefaultFileViewMode(docxProfile, "edit")).toBe("preview");
+    expect(
+      resolveFileViewSurface(
+        docxProfile,
+        "preview",
+        measureFilePreviewMetrics("", false),
+      ),
+    ).toEqual({
+      kind: "document-preview",
       useLowCostPreview: false,
     });
   });

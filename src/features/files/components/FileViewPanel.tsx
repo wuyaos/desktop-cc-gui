@@ -66,6 +66,7 @@ import { FileViewNavigationPanel } from "./FileViewNavigationPanel";
 import { useFileDocumentState } from "../hooks/useFileDocumentState";
 import { useFileExternalSync } from "../hooks/useFileExternalSync";
 import { useFileNavigation } from "../hooks/useFileNavigation";
+import { useFilePreviewPayload } from "../hooks/useFilePreviewPayload";
 
 type FileViewPanelProps = {
   workspaceId: string;
@@ -139,10 +140,18 @@ function formatFileSize(bytes: number): string {
 }
 
 function resolveAbsolutePath(workspacePath: string, relativePath: string) {
-  const base = workspacePath.endsWith("/")
-    ? workspacePath.slice(0, -1)
-    : workspacePath;
-  return `${base}/${relativePath}`;
+  const normalizedBase = normalizeFsPath(workspacePath).trim();
+  const normalizedRelativePath = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!normalizedBase) {
+    return normalizedRelativePath;
+  }
+  if (!normalizedRelativePath) {
+    return normalizedBase;
+  }
+  if (normalizedBase === "/" || /^[a-zA-Z]:\/$/.test(normalizedBase)) {
+    return `${normalizedBase}${normalizedRelativePath}`;
+  }
+  return `${normalizedBase.replace(/\/+$/, "")}/${normalizedRelativePath}`;
 }
 
 function buildGitLineDecorations(
@@ -261,7 +270,8 @@ export function FileViewPanel({
     [initialMode, renderProfile],
   );
   const isImage = renderProfile.kind === "image";
-  const isBinary = renderProfile.kind === "binary-unsupported";
+  const skipTextRead = renderProfile.previewSourceKind !== "inline-bytes";
+  const canEditDocument = renderProfile.editCapability !== "read-only";
   const [mode, setMode] = useState<"preview" | "edit">(
     () => defaultMode,
   );
@@ -391,7 +401,7 @@ export function FileViewPanel({
     customSpecRoot,
     workspaceRelativeFilePath,
     fileReadTarget,
-    isBinary,
+    skipTextRead,
     externalAbsoluteReadOnlyMessage: t("files.externalAbsoluteReadOnly"),
   });
   const {
@@ -414,7 +424,7 @@ export function FileViewPanel({
     externalChangeMonitoringEnabled,
     externalChangeTransportMode,
     externalChangePollIntervalMs,
-    isBinary,
+    isBinary: skipTextRead,
     isLoading,
     caseInsensitivePathCompare,
     setContent,
@@ -545,7 +555,7 @@ export function FileViewPanel({
       setGitLineMarkers({ added: [], modified: [] });
       return;
     }
-    if (!normalizedStatus || normalizedStatus === "D" || isBinary) {
+    if (!normalizedStatus || normalizedStatus === "D" || skipTextRead) {
       setGitLineMarkers({ added: [], modified: [] });
       return;
     }
@@ -573,7 +583,7 @@ export function FileViewPanel({
     fileGitStatus,
     fileReadTarget.domain,
     hasExplicitHighlightMarkers,
-    isBinary,
+    skipTextRead,
   ]);
 
   // Reset mode when file changes
@@ -696,12 +706,12 @@ export function FileViewPanel({
 
   // Switch to edit mode
   const handleEnterEdit = useCallback(() => {
-    if (truncated) return;
+    if (truncated || !canEditDocument) return;
     setMode("edit");
     requestAnimationFrame(() => {
       cmRef.current?.view?.focus();
     });
-  }, [truncated]);
+  }, [canEditDocument, truncated]);
 
   // Switch to preview mode
   const handleEnterPreview = useCallback(() => {
@@ -711,7 +721,7 @@ export function FileViewPanel({
   }, [onActiveFileLineRangeChange]);
 
   const handleOpenFindPanel = useCallback(() => {
-    if (isBinary || truncated) {
+    if (skipTextRead || truncated) {
       return;
     }
     pendingOpenFindPanelRef.current = true;
@@ -722,7 +732,7 @@ export function FileViewPanel({
     if (toggleFindPanelInEditor()) {
       pendingOpenFindPanelRef.current = false;
     }
-  }, [isBinary, mode, toggleFindPanelInEditor, truncated]);
+  }, [mode, skipTextRead, toggleFindPanelInEditor, truncated]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -778,6 +788,25 @@ export function FileViewPanel({
     () => resolveFileViewSurface(renderProfile, mode, previewMetrics),
     [mode, previewMetrics, renderProfile],
   );
+  const previewPayloadEnabled =
+    mode === "preview" &&
+    (viewSurface.kind === "pdf-preview" ||
+      viewSurface.kind === "tabular-preview" ||
+      viewSurface.kind === "document-preview");
+  const {
+    payload: previewPayload,
+    isLoading: previewPayloadLoading,
+    error: previewPayloadError,
+  } = useFilePreviewPayload({
+    workspaceId,
+    customSpecRoot,
+    fileReadTarget,
+    absolutePath,
+    renderProfile,
+    content,
+    truncated,
+    enabled: previewPayloadEnabled,
+  });
   const previewLanguage = renderProfile.previewLanguage;
   const highlightedPreviewLanguage = useMemo(
     () => (viewSurface.kind === "code-preview" && !viewSurface.useLowCostPreview
@@ -994,7 +1023,7 @@ export function FileViewPanel({
   // ── Topbar ──
   const renderTopbarActions = (className = "fvp-topbar-right") => (
     <div className={className}>
-      {!isBinary && (
+      {canEditDocument && (
         <>
           {mode === "preview" ? (
             <div className="fvp-action-group fvp-preview-tools" role="group">
@@ -1002,7 +1031,7 @@ export function FileViewPanel({
                 type="button"
                 className="fvp-action-btn"
                 onClick={handleEnterEdit}
-                disabled={truncated}
+                disabled={truncated || !canEditDocument}
                 title={truncated ? t("files.fileTooLarge") : t("files.edit")}
               >
                 <Pencil size={14} aria-hidden />
@@ -1251,6 +1280,9 @@ export function FileViewPanel({
       handleImageLoad={handleImageLoad}
       error={error}
       isLoading={isLoading}
+      previewPayload={previewPayload}
+      previewPayloadLoading={previewPayloadLoading}
+      previewPayloadError={previewPayloadError}
       viewSurface={viewSurface}
       content={content}
       setContent={setContent}
@@ -1277,17 +1309,17 @@ export function FileViewPanel({
       title={t("layout.resizePlanPanel")}
     >
       <div className="fvp-footer-left">
-        {!isBinary && mode === "edit" && isDirty && (
+        {canEditDocument && mode === "edit" && isDirty && (
           <span className="fvp-footer-hint">
             <span className="fvp-dirty-dot" />
             {t("files.unsavedChanges")}
             <span className="fvp-footer-shortcut">{t("files.saveShortcut")}</span>
           </span>
         )}
-        {!isBinary && mode === "edit" && !isDirty && (
+        {canEditDocument && mode === "edit" && !isDirty && (
           <span className="fvp-footer-hint fvp-footer-saved">{t("files.saved")}</span>
         )}
-        {!isBinary && mode === "preview" && truncated && (
+        {(mode === "preview" && (truncated || !canEditDocument)) && (
           <span className="fvp-footer-hint">{t("files.readOnly")}</span>
         )}
       </div>
@@ -1319,7 +1351,7 @@ export function FileViewPanel({
             </button>
           </div>
         ) : null}
-        {!isBinary && mode === "preview" && onInsertText && (
+        {mode === "preview" && onInsertText && content.trim().length > 0 && (
           <button
             type="button"
             className="ghost fvp-action-btn"
@@ -1332,7 +1364,7 @@ export function FileViewPanel({
             {t("files.addToChat")}
           </button>
         )}
-        {!isBinary && !truncated ? (
+        {!skipTextRead && !truncated ? (
           <button
             type="button"
             className="ghost fvp-action-btn fvp-find-toggle"
