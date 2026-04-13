@@ -546,7 +546,7 @@ vi.mock("react-i18next", () => ({
         "tools.userInputRequest": "Ask User Question",
         "tools.planQuickView": "Plan",
         "tools.openFullPlanPanel": "Open full Plan panel",
-        "statusPanel.tabLatestUserMessage": "Latest User Message",
+        "statusPanel.tabLatestUserMessage": "Latest Conversation",
         "statusPanel.emptyLatestUserMessage": "No latest user message",
         "statusPanel.latestUserMessageImages": "Images: {{count}}",
         "statusPanel.expandLatestUserMessage": "Expand",

@@ -1512,7 +1512,7 @@ const enPart2 = {
     tabSubagents: "Subagents",
     tabAgents: "Agents",
     tabEdits: "Edits",
-    tabLatestUserMessage: "Latest User Message",
+    tabLatestUserMessage: "Latest Conversation",
     tabPlan: "Plan",
     tabCommands: "Commands",
     files: "files",

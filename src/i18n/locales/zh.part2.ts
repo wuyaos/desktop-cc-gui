@@ -1485,7 +1485,7 @@ const zhPart2 = {
     tabSubagents: "子代理",
     tabAgents: "Agent",
     tabEdits: "编辑",
-    tabLatestUserMessage: "最新用户对话",
+    tabLatestUserMessage: "最新对话",
     tabPlan: "Plan",
     tabCommands: "命令",
     files: "文件",

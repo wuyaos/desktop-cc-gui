@@ -9,6 +9,7 @@ import {
   deleteGeminiSession,
   deleteOpenCodeSession,
   connectWorkspace,
+  createWorkspaceDirectory,
   forkClaudeSession,
   forkClaudeSessionFromMessage,
   forkThread,
@@ -23,7 +24,10 @@ import {
   setThreadTitle,
   listThreads,
   resumeThread,
+  readWorkspaceFile,
   startThread,
+  trashWorkspaceItem,
+  writeWorkspaceFile,
 } from "../../../services/tauri";
 import {
   buildItemsFromThread,
@@ -38,6 +42,7 @@ import { useThreadActions } from "./useThreadActions";
 vi.mock("../../../services/tauri", () => ({
   startThread: vi.fn(),
   connectWorkspace: vi.fn(),
+  createWorkspaceDirectory: vi.fn(),
   forkClaudeSession: vi.fn(),
   forkClaudeSessionFromMessage: vi.fn(),
   forkThread: vi.fn(),
@@ -48,6 +53,7 @@ vi.mock("../../../services/tauri", () => ({
   loadGeminiSession: vi.fn(),
   loadCodexSession: vi.fn(),
   listThreadTitles: vi.fn(),
+  readWorkspaceFile: vi.fn(),
   renameThreadTitleKey: vi.fn(),
   setThreadTitle: vi.fn(),
   resumeThread: vi.fn(),
@@ -57,6 +63,8 @@ vi.mock("../../../services/tauri", () => ({
   deleteClaudeSession: vi.fn(),
   deleteGeminiSession: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
+  trashWorkspaceItem: vi.fn(),
+  writeWorkspaceFile: vi.fn(),
 }));
 
 vi.mock("../../../utils/threadItems", () => ({
@@ -88,6 +96,7 @@ describe("useThreadActions", () => {
     vi.mocked(renameThreadTitleKey).mockResolvedValue(undefined);
     vi.mocked(setThreadTitle).mockResolvedValue("title");
     vi.mocked(connectWorkspace).mockResolvedValue(undefined);
+    vi.mocked(createWorkspaceDirectory).mockResolvedValue(undefined);
     vi.mocked(previewThreadName).mockImplementation((text: string, fallback: string) => {
       const trimmed = text.trim();
       return trimmed || fallback;
@@ -105,6 +114,12 @@ describe("useThreadActions", () => {
       archivedBeforeDelete: true,
     });
     vi.mocked(loadGeminiSession).mockResolvedValue({ messages: [] });
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "",
+      truncated: false,
+    });
+    vi.mocked(trashWorkspaceItem).mockResolvedValue(undefined);
+    vi.mocked(writeWorkspaceFile).mockResolvedValue(undefined);
   });
 
   function renderActions(
@@ -376,6 +391,18 @@ describe("useThreadActions", () => {
         {
           kind: "message",
           role: "user",
+          id: "440e8400-e29b-41d4-a716-446655440000",
+          text: "更早一条",
+        },
+        {
+          kind: "message",
+          role: "assistant",
+          id: "assistant-0",
+          text: "更早回复",
+        },
+        {
+          kind: "message",
+          role: "user",
           id: "550e8400-e29b-41d4-a716-446655440000",
           text: "回溯目标",
         },
@@ -441,6 +468,12 @@ describe("useThreadActions", () => {
           {
             kind: "message",
             role: "user",
+            id: "440e8400-e29b-41d4-a716-446655440123",
+            text: "更早一条",
+          },
+          {
+            kind: "message",
+            role: "user",
             id: "550e8400-e29b-41d4-a716-446655440123",
             text: "回溯目标",
           },
@@ -467,6 +500,12 @@ describe("useThreadActions", () => {
       },
       itemsByThread: {
         "claude:session-1": [
+          {
+            id: "local-user-0",
+            kind: "message",
+            role: "user",
+            text: "更早一条",
+          },
           {
             id: "local-user-1",
             kind: "message",
@@ -524,6 +563,92 @@ describe("useThreadActions", () => {
     expect(loadedThreadsRef.current["claude:forked-from-message-replaced"]).toBe(true);
   });
 
+  it("deletes the current Claude thread when rewinding from the first user message", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    } as any);
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(loadClaudeSession).mockResolvedValue({
+      messages: [
+        {
+          kind: "message",
+          role: "user",
+          id: "550e8400-e29b-41d4-a716-446655440010",
+          text: "你好在不在",
+        },
+        {
+          kind: "message",
+          role: "assistant",
+          id: "assistant-1",
+          text: "我在。",
+        },
+      ],
+    } as any);
+
+    const { result, dispatch, loadedThreadsRef } = renderActions({
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "claude:session-1",
+            name: "你好在不在",
+            updatedAt: 1,
+            engineSource: "claude",
+          },
+        ],
+      },
+      activeThreadIdByWorkspace: {
+        "ws-1": "claude:session-1",
+      },
+      itemsByThread: {
+        "claude:session-1": [
+          {
+            id: "user-local-first",
+            kind: "message",
+            role: "user",
+            text: "你好在不在",
+          },
+          {
+            id: "assistant-local-first",
+            kind: "message",
+            role: "assistant",
+            text: "我在。",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, { preserveState: true });
+    });
+
+    dispatch.mockClear();
+
+    let output: string | null = null;
+    await act(async () => {
+      output = await result.current.forkClaudeSessionFromMessageForWorkspace(
+        "ws-1",
+        "claude:session-1",
+        "user-local-first",
+      );
+    });
+
+    expect(output).toBe("claude:session-1");
+    expect(forkClaudeSessionFromMessage).not.toHaveBeenCalled();
+    expect(deleteClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1");
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "removeThread",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "renameThreadId" }),
+    );
+    expect(loadedThreadsRef.current["claude:session-1"]).toBeUndefined();
+  });
+
   it("resolves local Claude user message id to history id before rewind fork", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {
@@ -539,6 +664,12 @@ describe("useThreadActions", () => {
     vi.mocked(loadClaudeSession)
       .mockResolvedValueOnce({
         messages: [
+          {
+            kind: "message",
+            role: "user",
+            id: "440e8400-e29b-41d4-a716-446655440000",
+            text: "更早一条",
+          },
           {
             kind: "message",
             role: "user",
@@ -558,6 +689,12 @@ describe("useThreadActions", () => {
     const { result } = renderActions({
       itemsByThread: {
         "claude:session-1": [
+          {
+            id: "user-1744548491000-prev000",
+            kind: "message",
+            role: "user",
+            text: "更早一条",
+          },
           {
             id: "user-1744548492000-abcd12",
             kind: "message",
@@ -657,14 +794,14 @@ describe("useThreadActions", () => {
       await result.current.forkClaudeSessionFromMessageForWorkspace(
         "ws-1",
         "claude:session-1",
-        "user-1744548492000-old111",
+        "user-1744548493000-new222",
       );
     });
 
     expect(forkClaudeSessionFromMessage).toHaveBeenCalledWith(
       "/tmp/codex",
       "session-1",
-      "550e8400-e29b-41d4-a716-446655440000",
+      "660e8400-e29b-41d4-a716-446655440000",
     );
   });
 
@@ -678,6 +815,12 @@ describe("useThreadActions", () => {
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(loadClaudeSession).mockResolvedValue({
       messages: [
+        {
+          kind: "message",
+          role: "user",
+          id: "660e8400-e29b-41d4-a716-446655440000",
+          text: "更早一条",
+        },
         {
           kind: "message",
           role: "user",
@@ -706,6 +849,12 @@ describe("useThreadActions", () => {
     const { result } = renderActions({
       itemsByThread: {
         "claude:session-1": [
+          {
+            id: "user-1744548492000-prev111",
+            kind: "message",
+            role: "user",
+            text: "更早一条",
+          },
           {
             id: "user-1744548493000-new222",
             kind: "message",
@@ -746,6 +895,172 @@ describe("useThreadActions", () => {
       });
       await firstCall;
     });
+  });
+
+  it("restores changed workspace files before Claude rewind completes", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    } as any);
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(loadClaudeSession)
+      .mockResolvedValueOnce({
+        messages: [
+          {
+            kind: "message",
+            role: "user",
+            id: "550e8400-e29b-41d4-a716-446655440111",
+            text: "回溯目标",
+          },
+        ],
+      } as any)
+      .mockResolvedValue({ messages: [] } as any);
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "const value = 'after';\n",
+      truncated: false,
+    });
+    vi.mocked(forkClaudeSessionFromMessage).mockResolvedValue({
+      thread: { id: "claude:forked-from-message-restore" },
+      sessionId: "forked-from-message-restore",
+    });
+
+    const { result } = renderActions({
+      itemsByThread: {
+        "claude:session-1": [
+          {
+            id: "user-local-1",
+            kind: "message",
+            role: "user",
+            text: "回溯目标",
+          },
+          {
+            id: "tool-file-1",
+            kind: "tool",
+            toolType: "fileChange",
+            title: "File changes",
+            detail: "{}",
+            changes: [
+              {
+                path: "src/App.tsx",
+                kind: "modified",
+                diff: "@@ -1,1 +1,1 @@\n-const value = 'before';\n+const value = 'after';",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, { preserveState: true });
+    });
+
+    await act(async () => {
+      await result.current.forkClaudeSessionFromMessageForWorkspace(
+        "ws-1",
+        "claude:session-1",
+        "user-local-1",
+      );
+    });
+
+    expect(writeWorkspaceFile).toHaveBeenCalledWith(
+      "ws-1",
+      "src/App.tsx",
+      "const value = 'before';\n",
+    );
+  });
+
+  it("rolls workspace files back when Claude rewind fork fails", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    } as any);
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(loadClaudeSession).mockResolvedValue({
+      messages: [
+        {
+          kind: "message",
+          role: "user",
+          id: "440e8400-e29b-41d4-a716-446655440100",
+          text: "更早一条",
+        },
+        {
+          kind: "message",
+          role: "user",
+          id: "550e8400-e29b-41d4-a716-446655440112",
+          text: "回溯目标",
+        },
+      ],
+    } as any);
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "const value = 'after';\n",
+      truncated: false,
+    });
+    vi.mocked(forkClaudeSessionFromMessage).mockRejectedValue(
+      new Error("fork failed"),
+    );
+
+    const { result } = renderActions({
+      itemsByThread: {
+        "claude:session-1": [
+          {
+            id: "user-local-prev-2",
+            kind: "message",
+            role: "user",
+            text: "更早一条",
+          },
+          {
+            id: "user-local-2",
+            kind: "message",
+            role: "user",
+            text: "回溯目标",
+          },
+          {
+            id: "tool-file-2",
+            kind: "tool",
+            toolType: "fileChange",
+            title: "File changes",
+            detail: "{}",
+            changes: [
+              {
+                path: "src/App.tsx",
+                kind: "modified",
+                diff: "@@ -1,1 +1,1 @@\n-const value = 'before';\n+const value = 'after';",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, { preserveState: true });
+    });
+
+    await act(async () => {
+      await result.current.forkClaudeSessionFromMessageForWorkspace(
+        "ws-1",
+        "claude:session-1",
+        "user-local-2",
+      );
+    });
+
+    expect(writeWorkspaceFile).toHaveBeenNthCalledWith(
+      1,
+      "ws-1",
+      "src/App.tsx",
+      "const value = 'before';\n",
+    );
+    expect(writeWorkspaceFile).toHaveBeenNthCalledWith(
+      2,
+      "ws-1",
+      "src/App.tsx",
+      "const value = 'after';\n",
+    );
   });
 
   it("starts a thread without activating when requested", async () => {

@@ -230,7 +230,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Latest User Message")).toBeTruthy();
+    expect(screen.getByText("Latest Conversation")).toBeTruthy();
 
     rerender(
       <StatusPanel
@@ -239,7 +239,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    expect(screen.queryByText("Latest User Message")).toBeNull();
+    expect(screen.queryByText("Latest Conversation")).toBeNull();
   });
 
   it("renders latest user message tab for codex dock threads without selecting it by default", () => {
@@ -252,7 +252,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Latest User Message")).toBeTruthy();
+    expect(screen.getByText("Latest Conversation")).toBeTruthy();
     expect(screen.queryByText("Images: 2")).toBeNull();
   });
 
@@ -272,7 +272,7 @@ describe("StatusPanel", () => {
       "statusPanel.tabTodos",
       "statusPanel.tabSubagents",
       "statusPanel.tabEdits",
-      "Latest User Message",
+      "Latest Conversation",
     ]);
 
     rerender(
@@ -291,7 +291,7 @@ describe("StatusPanel", () => {
       "statusPanel.tabTodos",
       "statusPanel.tabAgents",
       "statusPanel.tabEdits",
-      "Latest User Message",
+      "Latest Conversation",
     ]);
   });
 
@@ -304,7 +304,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Latest User Message"));
+    fireEvent.click(screen.getByText("Latest Conversation"));
 
     expect(screen.getByText(/第一行/)).toBeTruthy();
     expect(screen.getByText("Images: 2")).toBeTruthy();
@@ -356,7 +356,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Latest User Message"));
+    fireEvent.click(screen.getByText("Latest Conversation"));
     expect(screen.getByText(/第一行/)).toBeTruthy();
 
     rerender(

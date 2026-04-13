@@ -50,6 +50,11 @@ import {
   normalizeRootPath,
 } from "../utils/threadNormalize";
 import { saveThreadActivity } from "../utils/threadStorage";
+import {
+  applyClaudeRewindWorkspaceRestore,
+  findImpactedClaudeRewindItems,
+  restoreClaudeRewindWorkspaceSnapshots,
+} from "../utils/claudeRewindRestore";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 
 type UseThreadActionsOptions = {
@@ -192,6 +197,21 @@ function resolveClaudeRewindMessageIdFromHistory(params: {
 
 function findLatestHistoryUserMessageId(items: ConversationItem[]): string {
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (!isUserConversationMessage(item)) {
+      continue;
+    }
+    const id = item.id.trim();
+    if (!id) {
+      continue;
+    }
+    return id;
+  }
+  return "";
+}
+
+function findFirstHistoryUserMessageId(items: ConversationItem[]): string {
+  for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
     if (!isUserConversationMessage(item)) {
       continue;
@@ -1409,6 +1429,9 @@ export function useThreadActions({
         label: "thread/fork from message",
         payload: { workspaceId, threadId, messageId: normalizedMessageId },
       });
+      let rewindRestoreState:
+        | Awaited<ReturnType<typeof applyClaudeRewindWorkspaceRestore>>
+        | null = null;
       try {
         const threadItems = itemsByThread[threadId] ?? [];
         const historyResponse = await loadClaudeSessionService(
@@ -1420,6 +1443,7 @@ export function useThreadActions({
             ? (historyResponse as Record<string, unknown>)
             : {};
         const historyItems = parseClaudeHistoryMessages(historyRecord.messages);
+        const firstHistoryMessageId = findFirstHistoryUserMessageId(historyItems);
         const latestHistoryMessageId = findLatestHistoryUserMessageId(historyItems);
         if (!latestHistoryMessageId) {
           return null;
@@ -1433,6 +1457,10 @@ export function useThreadActions({
         if (!resolvedMessageId) {
           return null;
         }
+        const impactedItems = findImpactedClaudeRewindItems(
+          threadItems,
+          normalizedMessageId,
+        );
         onDebug?.({
           id: `${Date.now()}-client-thread-fork-from-message-resolved`,
           timestamp: Date.now(),
@@ -1443,9 +1471,41 @@ export function useThreadActions({
             threadId,
             requestedMessageId: normalizedMessageId,
             resolvedMessageId,
+            firstHistoryMessageId,
             latestHistoryMessageId,
           },
         });
+        rewindRestoreState = await applyClaudeRewindWorkspaceRestore({
+          workspaceId,
+          workspacePath,
+          impactedItems,
+        });
+        if ((rewindRestoreState?.skippedPaths?.length ?? 0) > 0) {
+          onDebug?.({
+            id: `${Date.now()}-client-thread-fork-from-message-restore-skipped`,
+            timestamp: Date.now(),
+            source: "error",
+            label: "thread/fork from message restore skipped",
+            payload: {
+              workspaceId,
+              threadId,
+              skippedPaths: rewindRestoreState?.skippedPaths ?? [],
+            },
+          });
+        }
+        if (
+          firstHistoryMessageId &&
+          resolvedMessageId === firstHistoryMessageId
+        ) {
+          await deleteClaudeSessionService(workspacePath, sessionId);
+          delete loadedThreadsRef.current[threadId];
+          dispatch({
+            type: "removeThread",
+            workspaceId,
+            threadId,
+          });
+          return threadId;
+        }
         const response = await forkClaudeSessionFromMessageService(
           workspacePath,
           sessionId,
@@ -1460,6 +1520,12 @@ export function useThreadActions({
         });
         const forkedThreadId = extractThreadId(response);
         if (!forkedThreadId) {
+          if (rewindRestoreState?.originalSnapshots?.length) {
+            await restoreClaudeRewindWorkspaceSnapshots(
+              workspaceId,
+              rewindRestoreState.originalSnapshots,
+            );
+          }
           return null;
         }
         dispatch({
@@ -1513,6 +1579,16 @@ export function useThreadActions({
         }
         return forkedThreadId;
       } catch (error) {
+        try {
+          if (rewindRestoreState?.originalSnapshots?.length) {
+            await restoreClaudeRewindWorkspaceSnapshots(
+              workspaceId,
+              rewindRestoreState.originalSnapshots,
+            );
+          }
+        } catch {
+          // Best effort rollback is handled in the main rewind path below.
+        }
         onDebug?.({
           id: `${Date.now()}-client-thread-fork-from-message-error`,
           timestamp: Date.now(),
