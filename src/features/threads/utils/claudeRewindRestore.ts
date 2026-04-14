@@ -664,6 +664,9 @@ export function reverseApplyUnifiedDiff(
   const sourceLines = splitContentLines(normalizedContent);
   const hunks = parseUnifiedDiffHunks(diff);
   if (hunks.length === 0) {
+    if (hasMeaningfulUnifiedDiffChanges(diff)) {
+      throw new Error("Claude rewind patch has no parseable hunk.");
+    }
     return normalizedContent;
   }
 

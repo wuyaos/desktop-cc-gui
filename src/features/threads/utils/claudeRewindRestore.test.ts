@@ -101,6 +101,15 @@ describe("claudeRewindRestore", () => {
     expect(reverted).toBe("line-1\nline-old\nline-3");
   });
 
+  it("throws when unified diff has edits but no parseable hunk header", () => {
+    expect(() =>
+      reverseApplyUnifiedDiff(
+        "line-new\n",
+        "@@\n-line-old\n+line-new",
+      ),
+    ).toThrow("Claude rewind patch has no parseable hunk.");
+  });
+
   it("removes files that were added after the rewind target", async () => {
     vi.mocked(readWorkspaceFile).mockResolvedValue({
       content: "export const created = true;\n",
@@ -427,6 +436,45 @@ describe("claudeRewindRestore", () => {
     );
     expect(writeWorkspaceFile).not.toHaveBeenCalled();
     expect(trashWorkspaceItem).not.toHaveBeenCalled();
+  });
+
+  it("falls back to git revert when apply_patch modified diff omits line-number hunks", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "line-new\n",
+      truncated: false,
+    });
+
+    const impactedItems: ConversationItem[] = [
+      fileToolItem("tool-apply-patch-modified-no-hunk", {
+        changes: [
+          {
+            path: "src/main/java/com/example/demo/security/SecurityConfig.java",
+            kind: "modified",
+            diff: [
+              "*** Begin Patch",
+              "*** Update File: src/main/java/com/example/demo/security/SecurityConfig.java",
+              "@@",
+              "-line-old",
+              "+line-new",
+              "*** End Patch",
+            ].join("\n"),
+          },
+        ],
+      }),
+    ];
+
+    const result = await applyClaudeRewindWorkspaceRestore({
+      workspaceId: "ws-1",
+      workspacePath: "/repo",
+      impactedItems,
+    });
+
+    expect(result?.skippedPaths).toEqual([]);
+    expect(revertGitFile).toHaveBeenCalledWith(
+      "ws-1",
+      "src/main/java/com/example/demo/security/SecurityConfig.java",
+    );
+    expect(writeWorkspaceFile).not.toHaveBeenCalled();
   });
 
   it("keeps skipped path when git revert fallback fails", async () => {
