@@ -106,6 +106,28 @@ jobs:
           if [ -n "${TAURI_SIGNING_PRIVATE_KEY_B64:-}" ]; then
             # TAURI_SIGNING_PRIVATE_KEY expects base64-encoded minisign key
             export TAURI_SIGNING_PRIVATE_KEY="$TAURI_SIGNING_PRIVATE_KEY_B64"
+          else
+            # Upstream config enables updater signing by default. When no CI signing key
+            # is provided, turn off updater artifacts to allow unsigned deb builds.
+            python3 - <<'PY'
+            import json
+            from pathlib import Path
+
+            cfg_path = Path("src-tauri/tauri.conf.json")
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+
+            bundle = cfg.setdefault("bundle", {})
+            bundle["createUpdaterArtifacts"] = False
+
+            plugins = cfg.setdefault("plugins", {})
+            updater = plugins.get("updater")
+            if isinstance(updater, dict):
+                updater["active"] = False
+                updater.pop("pubkey", None)
+
+            cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print("Disabled updater signing because TAURI_SIGNING_PRIVATE_KEY_B64 is empty.")
+            PY
           fi
           npm run tauri -- build --bundles deb
 
