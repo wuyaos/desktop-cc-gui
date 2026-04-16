@@ -109,7 +109,7 @@ jobs:
           else
             # Upstream config enables updater signing by default. When no CI signing key
             # is provided, turn off updater artifacts to allow unsigned deb builds.
-            node -e 'const fs=require("fs"); const p="src-tauri/tauri.conf.json"; const cfg=JSON.parse(fs.readFileSync(p,"utf8")); cfg.bundle={...(cfg.bundle||{}), createUpdaterArtifacts:false}; cfg.plugins=cfg.plugins||{}; if (cfg.plugins.updater && typeof cfg.plugins.updater==="object") { cfg.plugins.updater.active=false; delete cfg.plugins.updater.pubkey; } fs.writeFileSync(p, JSON.stringify(cfg,null,2)+"\n"); console.log("Disabled updater signing because TAURI_SIGNING_PRIVATE_KEY_B64 is empty.");'
+            node -e 'const fs=require("fs"); const p="src-tauri/tauri.conf.json"; const cfg=JSON.parse(fs.readFileSync(p,"utf8")); cfg.bundle={...(cfg.bundle||{}), createUpdaterArtifacts:false}; fs.writeFileSync(p, JSON.stringify(cfg,null,2)+"\n"); console.log("Disabled updater artifact signing because TAURI_SIGNING_PRIVATE_KEY_B64 is empty.");'
           fi
           npm run tauri -- build --bundles deb
 
