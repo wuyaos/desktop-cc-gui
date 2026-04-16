@@ -1,11 +1,16 @@
 diff --git a/src-tauri/src/bin/cc_gui_daemon/web_service_runtime.rs b/src-tauri/src/bin/cc_gui_daemon/web_service_runtime.rs
 --- a/src-tauri/src/bin/cc_gui_daemon/web_service_runtime.rs
 +++ b/src-tauri/src/bin/cc_gui_daemon/web_service_runtime.rs
-@@ -1205,6 +1205,7 @@ fn resolve_web_assets_root() -> Option<PathBuf> {
+@@ -1205,6 +1205,12 @@ fn resolve_web_assets_root() -> Option<PathBuf> {
  fn append_asset_candidates(base: &Path, output: &mut Vec<PathBuf>) {
      output.push(base.join("dist"));
      output.push(base.join("../dist"));
 +    output.push(base.join("../lib/ccgui/dist"));
++    output.push(PathBuf::from("/usr/lib/ccgui/dist"));
++    output.push(PathBuf::from("/usr/lib/cc-gui/dist"));
++    output.push(PathBuf::from("/usr/local/lib/ccgui/dist"));
++    output.push(PathBuf::from("/usr/local/lib/cc-gui/dist"));
++    output.push(PathBuf::from("/opt/ccgui/dist"));
      output.push(base.join("resources"));
      output.push(base.join("resources/dist"));
      output.push(base.join("Resources"));
