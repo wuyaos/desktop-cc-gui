@@ -1,0 +1,94 @@
+name: Build Debian Package (glibc 2.36)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Source branch/tag/commit from zhukunpenglinyutong/desktop-cc-gui"
+        required: true
+        default: "main"
+
+permissions:
+  contents: read
+
+jobs:
+  build_deb_glibc236:
+    name: build deb (x86_64, glibc 2.36)
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm-slim
+    env:
+      SOURCE_REPO: https://github.com/zhukunpenglinyutong/desktop-cc-gui.git
+      SOURCE_REF: ${{ github.event.inputs.source_ref }}
+      TAURI_SIGNING_PRIVATE_KEY_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}
+    steps:
+      - name: Install system dependencies
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git python3 pkg-config build-essential cmake \
+            libgtk-3-dev librsvg2-dev patchelf libfuse2 xdg-utils libasound2-dev
+
+          WEBKIT_DEV="libwebkit2gtk-4.1-dev"
+          if ! apt-cache show "$WEBKIT_DEV" >/dev/null 2>&1; then
+            WEBKIT_DEV="libwebkit2gtk-4.0-dev"
+          fi
+
+          APPINDICATOR_DEV="libayatana-appindicator3-dev"
+          if ! apt-cache show "$APPINDICATOR_DEV" >/dev/null 2>&1; then
+            APPINDICATOR_DEV="libappindicator3-dev"
+          fi
+
+          apt-get install -y --no-install-recommends "$WEBKIT_DEV" "$APPINDICATOR_DEV"
+
+      - name: Verify glibc version
+        run: |
+          set -euo pipefail
+          ldd --version | head -n 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Clone source repository
+        run: |
+          set -euo pipefail
+          git clone "$SOURCE_REPO" source
+          cd source
+          git fetch --tags --force
+          git checkout "$SOURCE_REF"
+          git rev-parse HEAD
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './source/src-tauri -> target'
+
+      - name: Install frontend dependencies
+        working-directory: source
+        run: npm ci
+
+      - name: Build deb package
+        working-directory: source
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+        run: |
+          set -euo pipefail
+          if [ -n "${TAURI_SIGNING_PRIVATE_KEY_B64:-}" ]; then
+            # TAURI_SIGNING_PRIVATE_KEY expects base64-encoded minisign key
+            export TAURI_SIGNING_PRIVATE_KEY="$TAURI_SIGNING_PRIVATE_KEY_B64"
+          fi
+          npm run tauri -- build --bundles deb
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccgui-deb-x86_64-glibc236
+          path: |
+            source/src-tauri/target/release/bundle/deb/*.deb
+            source/src-tauri/target/release/bundle/deb/*.deb.sig
