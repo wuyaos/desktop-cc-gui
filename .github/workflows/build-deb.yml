@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: debian:bookworm-slim
+    defaults:
+      run:
+        shell: bash
     env:
       SOURCE_REPO: https://github.com/zhukunpenglinyutong/desktop-cc-gui.git
       SOURCE_REF: ${{ github.event.inputs.source_ref }}
