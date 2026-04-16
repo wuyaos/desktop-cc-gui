@@ -88,6 +88,11 @@ jobs:
           git checkout "$SOURCE_REF"
           git rev-parse HEAD
 
+      - name: Patch web assets path for Debian layout
+        run: |
+          set -euo pipefail
+          python3 -c 'from pathlib import Path; p=Path("source/src-tauri/src/bin/cc_gui_daemon/web_service_runtime.rs"); t=p.read_text(encoding="utf-8"); n="    output.push(base.join(\"../dist\"));\\n"; a="    output.push(base.join(\"../lib/ccgui/dist\"));\\n"; (n in t) or (_ for _ in ()).throw(SystemExit("failed to locate append_asset_candidates patch anchor")); t2=t if a in t else t.replace(n, n+a, 1); p.write_text(t2, encoding="utf-8"); print("Debian assets fallback already present; skip patch." if a in t else "Patched append_asset_candidates with Debian /usr/lib/ccgui/dist fallback.")'
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
