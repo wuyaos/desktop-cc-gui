@@ -32,7 +32,7 @@ jobs:
           apt-get install -y --no-install-recommends \
             ca-certificates curl git python3 pkg-config build-essential cmake \
             libgtk-3-dev librsvg2-dev patchelf libfuse2 xdg-utils libasound2-dev \
-            libssl-dev
+            libssl-dev clang libclang-dev
 
           WEBKIT_DEV="libwebkit2gtk-4.1-dev"
           if ! apt-cache show "$WEBKIT_DEV" >/dev/null 2>&1; then
@@ -45,6 +45,26 @@ jobs:
           fi
 
           apt-get install -y --no-install-recommends "$WEBKIT_DEV" "$APPINDICATOR_DEV"
+
+      - name: Configure libclang path
+        run: |
+          set -euo pipefail
+
+          LIBCLANG_DIR=""
+          for d in /usr/lib/llvm-*/lib; do
+            if [ -e "$d/libclang.so" ] || compgen -G "$d/libclang.so.*" >/dev/null; then
+              LIBCLANG_DIR="$d"
+              break
+            fi
+          done
+
+          if [ -z "$LIBCLANG_DIR" ]; then
+            echo "libclang shared library not found under /usr/lib/llvm-*/lib" >&2
+            exit 1
+          fi
+
+          echo "LIBCLANG_PATH=$LIBCLANG_DIR" >> "$GITHUB_ENV"
+          echo "Using LIBCLANG_PATH=$LIBCLANG_DIR"
 
       - name: Verify glibc version
         run: |
