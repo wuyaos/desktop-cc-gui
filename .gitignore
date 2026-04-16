@@ -1,2 +1,4 @@
 .ace-tool/
 .omx/
+/ccgui_*.deb
+/ccgui_*.deb.sig
